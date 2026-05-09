@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="20dp"
+            android:text="📊 Statistiques"
+            android:textColor="@color/text"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <!-- Time stats -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="⏱ Temps d'écoute" android:textColor="@color/accent"
+            android:textSize="14sp" android:textStyle="bold" android:layout_marginBottom="8dp" />
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:weightSum="2" android:layout_marginBottom="16dp">
+            <androidx.cardview.widget.CardView android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:layout_marginEnd="8dp"
+                app:cardBackgroundColor="@color/surface" app:cardCornerRadius="12dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:padding="14dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Aujourd'hui" android:textColor="@color/muted" android:textSize="11sp" />
+                    <TextView android:id="@+id/tvTodayTime" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:text="0min"
+                        android:textColor="@color/accent" android:textSize="20sp" android:textStyle="bold" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+            <androidx.cardview.widget.CardView android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:layout_marginStart="8dp"
+                app:cardBackgroundColor="@color/surface" app:cardCornerRadius="12dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:padding="14dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Ce mois" android:textColor="@color/muted" android:textSize="11sp" />
+                    <TextView android:id="@+id/tvMonthTime" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:text="0min"
+                        android:textColor="@color/accent" android:textSize="20sp" android:textStyle="bold" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:weightSum="2" android:layout_marginBottom="24dp">
+            <androidx.cardview.widget.CardView android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:layout_marginEnd="8dp"
+                app:cardBackgroundColor="@color/surface" app:cardCornerRadius="12dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:padding="14dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Sessions / sem." android:textColor="@color/muted" android:textSize="11sp" />
+                    <TextView android:id="@+id/tvWeekSessions" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:text="0"
+                        android:textColor="@color/accent2" android:textSize="20sp" android:textStyle="bold" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+            <androidx.cardview.widget.CardView android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:layout_marginStart="8dp"
+                app:cardBackgroundColor="@color/surface" app:cardCornerRadius="12dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:padding="14dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Total écoute" android:textColor="@color/muted" android:textSize="11sp" />
+                    <TextView android:id="@+id/tvTotalHours" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:text="0h"
+                        android:textColor="@color/accent2" android:textSize="20sp" android:textStyle="bold" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+        </LinearLayout>
+
+        <!-- Verset stats -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="📖 Progression versets" android:textColor="@color/accent3"
+            android:textSize="14sp" android:textStyle="bold" android:layout_marginBottom="8dp" />
+
+        <androidx.cardview.widget.CardView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            app:cardBackgroundColor="@color/surface" app:cardCornerRadius="12dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:padding="16dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:layout_marginBottom="10dp">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:text="✅ Maîtrisés"
+                        android:textColor="@color/accent3" android:textSize="14sp" />
+                    <TextView android:id="@+id/tvMastered" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:text="0 versets"
+                        android:textColor="@color/accent3" android:textSize="16sp" android:textStyle="bold" />
+                </LinearLayout>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:layout_marginBottom="10dp">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:text="🔄 En cours"
+                        android:textColor="@color/warn" android:textSize="14sp" />
+                    <TextView android:id="@+id/tvInProgress" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:text="0 versets"
+                        android:textColor="@color/warn" android:textSize="16sp" android:textStyle="bold" />
+                </LinearLayout>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:text="⭕ À apprendre"
+                        android:textColor="@color/muted" android:textSize="14sp" />
+                    <TextView android:id="@+id/tvPending" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:text="0 versets"
+                        android:textColor="@color/muted" android:textSize="16sp" android:textStyle="bold" />
+                </LinearLayout>
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- Streak -->
+        <androidx.cardview.widget.CardView android:layout_width="match_parent" android:layout_height="wrap_content"
+            app:cardBackgroundColor="@color/surface" app:cardCornerRadius="12dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:padding="16dp" android:gravity="center">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="Série de révision" android:textColor="@color/muted" android:textSize="13sp" />
+                <TextView android:id="@+id/tvStreak" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" android:text="0 jours 🔥"
+                    android:textColor="@color/warn" android:textSize="28sp" android:textStyle="bold"
+                    android:layout_marginTop="4dp" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+    </LinearLayout>
+</ScrollView>

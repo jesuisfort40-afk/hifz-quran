@@ -1,0 +1,4 @@
+-keep class com.hifz.quran.model.** { *; }
+-keep class com.hifz.quran.db.** { *; }
+-keepattributes *Annotation*
+-dontwarn androidx.media3.**
