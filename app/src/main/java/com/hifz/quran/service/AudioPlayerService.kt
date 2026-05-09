@@ -242,9 +242,19 @@ class AudioPlayerService : LifecycleService() {
         manager.notify(NOTIF_ID, buildNotification())
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        progressJob.cancel()
-        player.release()
-    }
+    override fun onTaskRemoved(rootIntent: Intent?) {
+    super.onTaskRemoved(rootIntent)
+    player.stop()
+    player.release()
+    stopForeground(STOP_FOREGROUND_REMOVE)
+    stopSelf()
+}
+
+override fun onDestroy() {
+    super.onDestroy()
+    progressJob.cancel()
+    player.stop()
+    player.release()
+    stopForeground(STOP_FOREGROUND_REMOVE)
+}
 }
