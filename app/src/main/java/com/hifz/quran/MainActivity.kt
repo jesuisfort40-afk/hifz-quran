@@ -19,33 +19,32 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // ✅ FIX BUG NAVIGATION : on charge le fragment initial une seule fois
         if (savedInstanceState == null) {
             loadFragment(HomeFragment(), HomeFragment::class.java.simpleName)
         }
 
         binding.bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
-                R.id.nav_home      -> loadFragment(HomeFragment(),       HomeFragment::class.java.simpleName)
-                R.id.nav_sourates  -> loadFragment(SurahListFragment(),  SurahListFragment::class.java.simpleName)
-                R.id.nav_player    -> loadFragment(PlayerFragment(),      PlayerFragment::class.java.simpleName)
-                R.id.nav_stats     -> loadFragment(StatsFragment(),       StatsFragment::class.java.simpleName)
-                R.id.nav_settings  -> loadFragment(SettingsFragment(),    SettingsFragment::class.java.simpleName)
+                R.id.nav_home     -> loadFragment(HomeFragment(),      HomeFragment::class.java.simpleName)
+                R.id.nav_sourates -> loadFragment(SurahListFragment(), SurahListFragment::class.java.simpleName)
+                R.id.nav_player   -> loadFragment(PlayerFragment(),    PlayerFragment::class.java.simpleName)
+                R.id.nav_stats    -> loadFragment(StatsFragment(),     StatsFragment::class.java.simpleName)
+                R.id.nav_settings -> loadFragment(SettingsFragment(),  SettingsFragment::class.java.simpleName)
             }
             true
         }
     }
 
     /**
-     * ✅ FIX BUG NAVIGATION :
-     * On réutilise l'instance existante via le tag si elle est déjà dans la back-stack.
-     * Cela évite de recréer PlayerFragment (et de perdre la connexion au service audio)
-     * à chaque fois que l'utilisateur change d'onglet.
+     * BUG FIX #1 — Navigation crash
+     * AVANT : nouvelle instance à chaque clic → PlayerFragment perdait son ServiceConnection
+     *         → playerService = null → NPE au clic Play
+     * APRÈS : findFragmentByTag réutilise l'instance existante, la connexion service est préservée
      */
     fun loadFragment(fragment: Fragment, tag: String) {
         val existing = supportFragmentManager.findFragmentByTag(tag)
         supportFragmentManager.beginTransaction()
-            .setCustomAnimations(R.anim.fade_in, R.anim.fade_out)
+            .setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out)
             .replace(R.id.fragmentContainer, existing ?: fragment, tag)
             .commit()
     }
