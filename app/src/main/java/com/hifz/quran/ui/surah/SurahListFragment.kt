@@ -1,7 +1,5 @@
 package com.hifz.quran.ui.surah
 
-import android.app.Activity
-import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -14,11 +12,11 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
+import com.hifz.quran.MainActivity
 import com.hifz.quran.R
 import com.hifz.quran.databinding.FragmentSurahListBinding
 import com.hifz.quran.model.Sourate
 import com.hifz.quran.ui.player.PlayerFragment
-import com.hifz.quran.MainActivity
 
 class SurahListFragment : Fragment() {
 
@@ -28,7 +26,17 @@ class SurahListFragment : Fragment() {
     private lateinit var adapter: SurahAdapter
 
     private val pickAudio = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { showAddSourateDialog(it) }
+        uri?.let {
+            try {
+                // Persist permission to access URI after app restart
+                requireContext().contentResolver.takePersistableUriPermission(
+                    it, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (e: Exception) {
+                // Permission not persistable, continue anyway
+            }
+            showAddSourateDialog(it)
+        }
     }
 
     override fun onCreateView(
@@ -60,6 +68,7 @@ class SurahListFragment : Fragment() {
     }
 
     private fun showAddSourateDialog(uri: Uri) {
+        if (_binding == null) return
         val fileName = getFileName(uri) ?: "Sourate"
         val input = TextInputEditText(requireContext()).apply {
             setText(fileName.substringBeforeLast("."))
@@ -71,7 +80,7 @@ class SurahListFragment : Fragment() {
             .setMessage("Fichier: $fileName")
             .setView(input)
             .setPositiveButton("Ajouter") { _, _ ->
-                val name = input.text?.toString()?.trim() ?: fileName
+                val name = input.text?.toString()?.trim()?.ifEmpty { fileName } ?: fileName
                 vm.addSourate(uri, name)
             }
             .setNegativeButton("Annuler", null)
@@ -79,6 +88,7 @@ class SurahListFragment : Fragment() {
     }
 
     private fun confirmDelete(sourate: Sourate) {
+        if (_binding == null) return
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("Supprimer")
             .setMessage("Supprimer \"${sourate.name}\" et tous ses versets ?")
@@ -88,11 +98,10 @@ class SurahListFragment : Fragment() {
     }
 
     private fun openPlayer(sourate: Sourate) {
-        val fragment = PlayerFragment.newInstance(sourate.id)
-        (activity as? MainActivity)?.apply {
-            loadFragment(fragment)
-            navigateTo(R.id.nav_player)
-        }
+        val activity = activity as? MainActivity ?: return
+        vm.setSelectedSourate(sourate.id)
+        activity.loadFragment(PlayerFragment.newInstance(sourate.id), R.id.nav_player)
+        activity.navigateTo(R.id.nav_player)
     }
 
     private fun getFileName(uri: Uri): String? {
