@@ -26,7 +26,7 @@
             android:layout_height="wrap_content"
             android:gravity="center"
             android:padding="40dp"
-            android:text="Aucune sourate.\nAppuyez sur + pour en ajouter."
+            android:text="Aucune sourate.\nAppuyez sur + pour ouvrir la bibliothèque.\nAppui long sur + pour uploader un fichier MP3."
             android:textColor="@color/muted"
             android:textSize="16sp"
             android:visibility="gone" />

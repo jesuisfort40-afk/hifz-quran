@@ -12,11 +12,11 @@
         android:orientation="vertical"
         android:padding="16dp">
 
-        <!-- Header card -->
+        <!-- ── En-tête sourate ── -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
+            android:layout_marginBottom="12dp"
             app:cardBackgroundColor="@color/surface"
             app:cardCornerRadius="16dp">
 
@@ -44,15 +44,73 @@
                     android:gravity="center"
                     android:text="Aucune sourate sélectionnée"
                     android:textColor="@color/text"
-                    android:textSize="16sp" />
+                    android:textSize="15sp" />
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- Player card -->
+        <!-- ── Carte texte arabe du verset actif (mode bibliothèque) ── -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/cardArabicText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            app:cardBackgroundColor="@color/surface"
+            app:cardCornerRadius="16dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <!-- Badge numéro verset -->
+                <TextView
+                    android:id="@+id/tvVersetNumBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Verset 1"
+                    android:textColor="@color/accent"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="10dp"
+                    android:background="@drawable/bg_control_btn"
+                    android:paddingHorizontal="10dp"
+                    android:paddingVertical="4dp" />
+
+                <!-- Texte arabe -->
+                <TextView
+                    android:id="@+id/tvVersetArabic"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:textDirection="rtl"
+                    android:fontFamily="serif"
+                    android:textColor="@color/text"
+                    android:textSize="22sp"
+                    android:lineSpacingMultiplier="1.6"
+                    android:layout_marginBottom="12dp"
+                    android:visibility="gone" />
+
+                <!-- Translittération -->
+                <TextView
+                    android:id="@+id/tvVersetTranslit"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:textColor="@color/muted"
+                    android:textSize="13sp"
+                    android:fontFamily="serif"
+                    android:textStyle="italic"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- ── Player card ── -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
+            android:layout_marginBottom="12dp"
             app:cardBackgroundColor="@color/surface"
             app:cardCornerRadius="16dp">
 
@@ -62,7 +120,7 @@
                 android:orientation="vertical"
                 android:padding="16dp">
 
-                <!-- Seek bar -->
+                <!-- SeekBar globale -->
                 <SeekBar
                     android:id="@+id/seekBar"
                     android:layout_width="match_parent"
@@ -70,29 +128,21 @@
                     android:progressTint="@color/accent"
                     android:thumbTint="@color/accent" />
 
-                <!-- Time labels -->
+                <!-- Temps -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal">
-                    <TextView
-                        android:id="@+id/tvCurrentTime"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="0:00"
-                        android:textColor="@color/muted"
-                        android:textSize="12sp" />
+                    <TextView android:id="@+id/tvCurrentTime"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="0:00" android:textColor="@color/muted" android:textSize="12sp" />
                     <View android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
-                    <TextView
-                        android:id="@+id/tvDuration"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="0:00"
-                        android:textColor="@color/muted"
-                        android:textSize="12sp" />
+                    <TextView android:id="@+id/tvDuration"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="0:00" android:textColor="@color/muted" android:textSize="12sp" />
                 </LinearLayout>
 
-                <!-- Play controls -->
+                <!-- Contrôles : Prev | Play | Next -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -100,6 +150,18 @@
                     android:gravity="center"
                     android:orientation="horizontal">
 
+                    <!-- Bouton Précédent (bibliothèque uniquement) -->
+                    <ImageButton
+                        android:id="@+id/btnPrevVerset"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginEnd="16dp"
+                        android:background="@drawable/bg_control_btn"
+                        android:src="@drawable/ic_skip_previous"
+                        app:tint="@color/text"
+                        android:visibility="gone" />
+
+                    <!-- Play / Pause -->
                     <ImageButton
                         android:id="@+id/btnPlayPause"
                         android:layout_width="64dp"
@@ -108,9 +170,20 @@
                         android:src="@drawable/ic_play"
                         app:tint="@color/bg" />
 
+                    <!-- Bouton Suivant (bibliothèque uniquement) -->
+                    <ImageButton
+                        android:id="@+id/btnNextVerset"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="16dp"
+                        android:background="@drawable/bg_control_btn"
+                        android:src="@drawable/ic_skip_next"
+                        app:tint="@color/text"
+                        android:visibility="gone" />
+
                 </LinearLayout>
 
-                <!-- Speed and loop row -->
+                <!-- Vitesse + boucle -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -127,73 +200,56 @@
                         android:text="1.0x"
                         android:textSize="12sp" />
 
-                    <TextView
-                        android:id="@+id/tvSpeed"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:visibility="gone" />
+                    <TextView android:id="@+id/tvSpeed"
+                        android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:visibility="gone" />
 
                     <View android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
 
-                    <!-- Loop controls -->
                     <ImageButton
                         android:id="@+id/btnLoop"
-                        android:layout_width="36dp"
-                        android:layout_height="36dp"
+                        android:layout_width="36dp" android:layout_height="36dp"
                         android:background="@drawable/bg_control_btn"
-                        android:src="@drawable/ic_loop"
-                        android:layout_marginEnd="8dp"
+                        android:src="@drawable/ic_loop" android:layout_marginEnd="8dp"
                         app:tint="@color/muted" />
 
                     <ImageButton
                         android:id="@+id/btnLoopMinus"
-                        android:layout_width="28dp"
-                        android:layout_height="28dp"
+                        android:layout_width="28dp" android:layout_height="28dp"
                         android:background="@drawable/bg_control_btn"
-                        android:src="@drawable/ic_minus"
-                        app:tint="@color/text" />
+                        android:src="@drawable/ic_minus" app:tint="@color/text" />
 
                     <TextView
                         android:id="@+id/tvLoopCount"
-                        android:layout_width="32dp"
-                        android:layout_height="wrap_content"
-                        android:gravity="center"
-                        android:text="3"
-                        android:textColor="@color/text"
-                        android:textSize="14sp"
+                        android:layout_width="32dp" android:layout_height="wrap_content"
+                        android:gravity="center" android:text="3"
+                        android:textColor="@color/text" android:textSize="14sp"
                         android:textStyle="bold" />
 
                     <ImageButton
                         android:id="@+id/btnLoopPlus"
-                        android:layout_width="28dp"
-                        android:layout_height="28dp"
+                        android:layout_width="28dp" android:layout_height="28dp"
                         android:background="@drawable/bg_control_btn"
-                        android:src="@drawable/ic_plus"
-                        app:tint="@color/text" />
-
+                        android:src="@drawable/ic_plus" app:tint="@color/text" />
                 </LinearLayout>
 
-                <!-- Loop progress -->
+                <!-- Progress boucle -->
                 <TextView
                     android:id="@+id/tvLoopProgress"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:gravity="center"
-                    android:text="1/3"
-                    android:textColor="@color/accent"
-                    android:textSize="13sp"
-                    android:visibility="gone" />
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp" android:gravity="center"
+                    android:text="1/3" android:textColor="@color/accent"
+                    android:textSize="13sp" android:visibility="gone" />
 
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- Segment mode card -->
+        <!-- ── Segment (mode fichier local) ── -->
         <androidx.cardview.widget.CardView
+            android:id="@+id/cardSegment"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
+            android:layout_marginBottom="12dp"
             app:cardBackgroundColor="@color/surface"
             app:cardCornerRadius="16dp">
 
@@ -203,41 +259,31 @@
                 android:orientation="vertical"
                 android:padding="16dp">
 
-                <!-- Toggle row -->
                 <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:gravity="center_vertical" android:orientation="horizontal">
 
                     <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
+                        android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="✂ Sélection de segment"
                         android:textColor="@color/text"
-                        android:textSize="15sp"
-                        android:textStyle="bold" />
+                        android:textSize="15sp" android:textStyle="bold" />
 
                     <ImageButton
                         android:id="@+id/btnSegmentMode"
-                        android:layout_width="36dp"
-                        android:layout_height="36dp"
+                        android:layout_width="36dp" android:layout_height="36dp"
                         android:background="@drawable/bg_control_btn"
-                        android:src="@drawable/ic_cut"
-                        app:tint="@color/muted" />
+                        android:src="@drawable/ic_cut" app:tint="@color/muted" />
                 </LinearLayout>
 
-                <!-- Segment controls (hidden by default) -->
                 <LinearLayout
                     android:id="@+id/layoutSegment"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
                     android:orientation="vertical"
                     android:visibility="gone">
 
-                    <!-- Start -->
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical"
                         android:layout_marginBottom="8dp">
@@ -251,7 +297,6 @@
                             android:textColor="@color/accent3" android:textSize="11sp" android:gravity="end" />
                     </LinearLayout>
 
-                    <!-- End -->
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical"
                         android:layout_marginBottom="12dp">
@@ -265,7 +310,6 @@
                             android:textColor="@color/danger" android:textSize="11sp" android:gravity="end" />
                     </LinearLayout>
 
-                    <!-- Mark buttons -->
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:layout_marginBottom="12dp">
                         <com.google.android.material.button.MaterialButton
@@ -274,28 +318,28 @@
                             android:layout_width="0dp" android:layout_height="36dp"
                             android:layout_weight="1" android:layout_marginEnd="6dp"
                             android:text="⬅ Marquer début"
-                            android:textSize="11sp" app:strokeColor="@color/accent3" android:textColor="@color/accent3" />
+                            android:textSize="11sp" app:strokeColor="@color/accent3"
+                            android:textColor="@color/accent3" />
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btnMarkEnd"
                             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                             android:layout_width="0dp" android:layout_height="36dp"
                             android:layout_weight="1" android:layout_marginStart="6dp"
                             android:text="Marquer fin ➡"
-                            android:textSize="11sp" app:strokeColor="@color/danger" android:textColor="@color/danger" />
+                            android:textSize="11sp" app:strokeColor="@color/danger"
+                            android:textColor="@color/danger" />
                     </LinearLayout>
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnSaveVerset"
-                        android:layout_width="match_parent"
-                        android:layout_height="44dp"
+                        android:layout_width="match_parent" android:layout_height="44dp"
                         android:text="💾 Sauvegarder comme verset"
-                        app:backgroundTint="@color/accent2"
-                        app:cornerRadius="8dp" />
+                        app:backgroundTint="@color/accent2" app:cornerRadius="8dp" />
                 </LinearLayout>
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- Versets list -->
+        <!-- ── Liste des versets ── -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -309,39 +353,29 @@
                 android:padding="16dp">
 
                 <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
                     android:layout_marginBottom="12dp">
 
                     <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="📋 Versets"
-                        android:textColor="@color/text"
-                        android:textSize="15sp"
+                        android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:text="📋 Versets"
+                        android:textColor="@color/text" android:textSize="15sp"
                         android:textStyle="bold" />
 
                     <ImageButton
                         android:id="@+id/btnAddVerset"
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
+                        android:layout_width="32dp" android:layout_height="32dp"
                         android:background="@drawable/bg_control_btn"
-                        android:src="@drawable/ic_add"
-                        app:tint="@color/accent" />
+                        android:src="@drawable/ic_add" app:tint="@color/accent" />
                 </LinearLayout>
 
                 <TextView
                     android:id="@+id/tvNoVersets"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center"
-                    android:padding="20dp"
-                    android:text="Utilisez ✂ pour définir des versets"
-                    android:textColor="@color/muted"
-                    android:textSize="14sp" />
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:gravity="center" android:padding="20dp"
+                    android:text="Appuyez ▶ sur un verset pour commencer"
+                    android:textColor="@color/muted" android:textSize="14sp" />
 
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/rvVersets"
