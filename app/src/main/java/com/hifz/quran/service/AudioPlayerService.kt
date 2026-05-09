@@ -55,6 +55,18 @@ class AudioPlayerService : LifecycleService() {
         setupPlayerListener()
     }
 
+    // ✅ FIX BUG AUDIO CONTINUE + NOTIFICATION BLOQUÉE :
+    // onStartCommand gère maintenant les actions PLAY_PAUSE et STOP
+    // envoyées depuis les boutons de la notification.
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
+        when (intent?.action) {
+            ACTION_PLAY_PAUSE -> togglePlayPause()
+            ACTION_STOP -> stopPlayback()
+        }
+        return START_NOT_STICKY
+    }
+
     override fun onBind(intent: Intent): IBinder {
         super.onBind(intent)
         return binder
@@ -68,7 +80,6 @@ class AudioPlayerService : LifecycleService() {
                         if (loopEnabled && segmentEnd > 0) {
                             currentLoop++
                             if (loopCount == 0 || currentLoop < loopCount) {
-                                // Loop again
                                 player.seekTo(segmentStart)
                                 player.play()
                             } else {
@@ -121,6 +132,16 @@ class AudioPlayerService : LifecycleService() {
         if (player.isPlaying) player.pause() else player.play()
     }
 
+    // ✅ FIX BUG AUDIO CONTINUE + NOTIFICATION BLOQUÉE :
+    // stopPlayback() arrête proprement le player, retire la notification
+    // et stoppe le service foreground.
+    fun stopPlayback() {
+        player.stop()
+        stopProgressUpdates()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
     fun seekTo(posMs: Long) {
         player.seekTo(posMs)
         emitState()
@@ -156,7 +177,6 @@ class AudioPlayerService : LifecycleService() {
         progressUpdate = progressJob.launch {
             while (true) {
                 emitState()
-                // Auto-stop at segment end
                 if (loopEnabled && segmentEnd > 0 && player.currentPosition >= segmentEnd) {
                     currentLoop++
                     if (loopCount == 0 || currentLoop < loopCount) {
@@ -207,15 +227,19 @@ class AudioPlayerService : LifecycleService() {
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE
         )
-        val playPauseIntent = PendingIntent.getBroadcast(
+
+        // ✅ FIX BUG NOTIFICATION BLOQUÉE :
+        // Les PendingIntent pointent maintenant vers le SERVICE avec une action explicite
+        // (pas un broadcast implicite ignoré sur Android 8+).
+        val playPauseIntent = PendingIntent.getService(
             this, 0,
-            Intent(ACTION_PLAY_PAUSE),
-            PendingIntent.FLAG_IMMUTABLE
+            Intent(this, AudioPlayerService::class.java).apply { action = ACTION_PLAY_PAUSE },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-        val stopIntent = PendingIntent.getBroadcast(
+        val stopIntent = PendingIntent.getService(
             this, 1,
-            Intent(ACTION_STOP),
-            PendingIntent.FLAG_IMMUTABLE
+            Intent(this, AudioPlayerService::class.java).apply { action = ACTION_STOP },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
         return Notification.Builder(this, CHANNEL_ID)
@@ -233,7 +257,7 @@ class AudioPlayerService : LifecycleService() {
             .addAction(
                 Notification.Action.Builder(null, "Stop", stopIntent).build()
             )
-            .setOngoing(true)
+            .setOngoing(player.isPlaying) // ✅ ongoing seulement si en lecture
             .build()
     }
 
@@ -242,19 +266,9 @@ class AudioPlayerService : LifecycleService() {
         manager.notify(NOTIF_ID, buildNotification())
     }
 
-    override fun onTaskRemoved(rootIntent: Intent?) {
-    super.onTaskRemoved(rootIntent)
-    player.stop()
-    player.release()
-    stopForeground(STOP_FOREGROUND_REMOVE)
-    stopSelf()
-}
-
-override fun onDestroy() {
-    super.onDestroy()
-    progressJob.cancel()
-    player.stop()
-    player.release()
-    stopForeground(STOP_FOREGROUND_REMOVE)
-}
+    override fun onDestroy() {
+        super.onDestroy()
+        progressJob.cancel()
+        player.release()
+    }
 }
