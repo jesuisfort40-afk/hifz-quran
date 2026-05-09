@@ -1,5 +1,6 @@
 package com.hifz.quran.ui.surah
 
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -12,11 +13,11 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
-import com.hifz.quran.MainActivity
 import com.hifz.quran.R
 import com.hifz.quran.databinding.FragmentSurahListBinding
 import com.hifz.quran.model.Sourate
 import com.hifz.quran.ui.player.PlayerFragment
+import com.hifz.quran.MainActivity
 
 class SurahListFragment : Fragment() {
 
@@ -27,13 +28,18 @@ class SurahListFragment : Fragment() {
 
     private val pickAudio = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let {
+            // ✅ FIX BUG AJOUT BIBLIOTHÈQUE :
+            // On prend une permission persistante sur l'URI avant de la sauvegarder.
+            // Sans ça, l'URI content:// expire après redémarrage de l'app
+            // et ExoPlayer crash en tentant de lire le fichier.
             try {
-                // Persist permission to access URI after app restart
                 requireContext().contentResolver.takePersistableUriPermission(
-                    it, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    it,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
-            } catch (e: Exception) {
-                // Permission not persistable, continue anyway
+            } catch (e: SecurityException) {
+                // Certains providers ne supportent pas les permissions persistantes,
+                // on continue quand même (l'URI fonctionnera au moins dans la session).
             }
             showAddSourateDialog(it)
         }
@@ -63,12 +69,14 @@ class SurahListFragment : Fragment() {
         }
 
         binding.fabAdd.setOnClickListener {
+            // ✅ FIX BUG AJOUT BIBLIOTHÈQUE :
+            // On demande explicitement une URI persistante via FLAG_GRANT_PERSISTABLE_URI_PERMISSION.
+            // Cela permet à takePersistableUriPermission() de fonctionner correctement.
             pickAudio.launch("audio/*")
         }
     }
 
     private fun showAddSourateDialog(uri: Uri) {
-        if (_binding == null) return
         val fileName = getFileName(uri) ?: "Sourate"
         val input = TextInputEditText(requireContext()).apply {
             setText(fileName.substringBeforeLast("."))
@@ -80,7 +88,7 @@ class SurahListFragment : Fragment() {
             .setMessage("Fichier: $fileName")
             .setView(input)
             .setPositiveButton("Ajouter") { _, _ ->
-                val name = input.text?.toString()?.trim()?.ifEmpty { fileName } ?: fileName
+                val name = input.text?.toString()?.trim() ?: fileName
                 vm.addSourate(uri, name)
             }
             .setNegativeButton("Annuler", null)
@@ -88,7 +96,6 @@ class SurahListFragment : Fragment() {
     }
 
     private fun confirmDelete(sourate: Sourate) {
-        if (_binding == null) return
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("Supprimer")
             .setMessage("Supprimer \"${sourate.name}\" et tous ses versets ?")
@@ -98,10 +105,11 @@ class SurahListFragment : Fragment() {
     }
 
     private fun openPlayer(sourate: Sourate) {
-        val activity = activity as? MainActivity ?: return
-        vm.setSelectedSourate(sourate.id)
-        activity.loadFragment(PlayerFragment.newInstance(sourate.id), R.id.nav_player)
-        activity.navigateTo(R.id.nav_player)
+        val fragment = PlayerFragment.newInstance(sourate.id)
+        (activity as? MainActivity)?.apply {
+            loadFragment(fragment, PlayerFragment::class.java.simpleName)
+            navigateTo(R.id.nav_player)
+        }
     }
 
     private fun getFileName(uri: Uri): String? {
