@@ -3,4 +3,3 @@
     <background android:drawable="@color/accent2"/>
     <foreground android:drawable="@drawable/ic_quran"/>
 </adaptive-icon>
-Dis-moi quand c'est fait 
