@@ -75,6 +75,8 @@ class PlayerFragment : Fragment() {
         setupControls()
         observeViewModel()
 
+        // ✅ FIX BUG NAVIGATION : on ne recrée pas le service s'il tourne déjà,
+        // bindService suffit pour récupérer la connexion existante.
         val intent = Intent(requireContext(), AudioPlayerService::class.java)
         requireContext().startForegroundService(intent)
         requireContext().bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
@@ -91,12 +93,10 @@ class PlayerFragment : Fragment() {
     }
 
     private fun setupControls() {
-        // Play / Pause
         binding.btnPlayPause.setOnClickListener {
             playerService?.togglePlayPause()
         }
 
-        // SeekBar for global position
         binding.seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
                 if (fromUser) binding.tvCurrentTime.text = TimeUtils.formatMs(progress.toLong())
@@ -108,7 +108,6 @@ class PlayerFragment : Fragment() {
             }
         })
 
-        // Segment start/end sliders
         binding.seekSegmentStart.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
                 if (fromUser) {
@@ -117,9 +116,7 @@ class PlayerFragment : Fragment() {
                 }
             }
             override fun onStartTrackingTouch(sb: SeekBar) {}
-            override fun onStopTrackingTouch(sb: SeekBar) {
-                applySegment()
-            }
+            override fun onStopTrackingTouch(sb: SeekBar) { applySegment() }
         })
 
         binding.seekSegmentEnd.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -133,19 +130,14 @@ class PlayerFragment : Fragment() {
             override fun onStopTrackingTouch(sb: SeekBar) { applySegment() }
         })
 
-        // Toggle segment mode
         binding.btnSegmentMode.setOnClickListener {
             isSegmentMode = !isSegmentMode
             binding.layoutSegment.visibility = if (isSegmentMode) View.VISIBLE else View.GONE
             binding.btnSegmentMode.isSelected = isSegmentMode
         }
 
-        // Loop toggle
-        binding.btnLoop.setOnClickListener {
-            vm.toggleLoop()
-        }
+        binding.btnLoop.setOnClickListener { vm.toggleLoop() }
 
-        // Loop count
         binding.btnLoopMinus.setOnClickListener {
             val c = (vm.loopCount.value ?: 3) - 1
             vm.setLoopCount(maxOf(0, c))
@@ -155,10 +147,8 @@ class PlayerFragment : Fragment() {
             vm.setLoopCount(minOf(20, c))
         }
 
-        // Speed
         binding.btnSpeed.setOnClickListener { showSpeedPicker() }
 
-        // Mark current position as segment start
         binding.btnMarkStart.setOnClickListener {
             val pos = playerService?.getCurrentPosition() ?: 0L
             vm.setSegmentStart(pos)
@@ -174,10 +164,8 @@ class PlayerFragment : Fragment() {
             applySegment()
         }
 
-        // Save current segment as verset
         binding.btnSaveVerset.setOnClickListener { showSaveVersetDialog() }
 
-        // Add verset button
         binding.btnAddVerset.setOnClickListener {
             isSegmentMode = true
             binding.layoutSegment.visibility = View.VISIBLE
@@ -242,10 +230,7 @@ class PlayerFragment : Fragment() {
     }
 
     private fun loadSourate(sourate: Sourate) {
-        playerService?.loadAudio(
-            Uri.parse(sourate.filePath),
-            sourate.id
-        )
+        playerService?.loadAudio(Uri.parse(sourate.filePath), sourate.id)
     }
 
     private fun playVerset(verset: Verset) {
@@ -270,9 +255,8 @@ class PlayerFragment : Fragment() {
         val values = floatArrayOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("Vitesse de lecture")
-            .setItems(speeds) { _, i ->
-                playerService?.setSpeed(values[i])
-            }.show()
+            .setItems(speeds) { _, i -> playerService?.setSpeed(values[i]) }
+            .show()
     }
 
     private fun showSaveVersetDialog() {
@@ -289,9 +273,7 @@ class PlayerFragment : Fragment() {
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("Sauvegarder comme verset")
             .setMessage("Verset $count\nDe ${TimeUtils.formatMs(start)} à ${TimeUtils.formatMs(end)}")
-            .setPositiveButton("Sauvegarder") { _, _ ->
-                vm.saveVerset(start, end)
-            }
+            .setPositiveButton("Sauvegarder") { _, _ -> vm.saveVerset(start, end) }
             .setNegativeButton("Annuler", null)
             .show()
     }
@@ -303,15 +285,17 @@ class PlayerFragment : Fragment() {
             .setNegativeButton("Annuler", null).show()
     }
 
-    override fun onStop() {
-        super.onStop()
+    // ✅ FIX BUG NAVIGATION :
+    // Le unbindService est déplacé de onStop() vers onDestroyView().
+    // Ainsi, quand l'utilisateur change d'onglet (onStop est appelé),
+    // la connexion au service est conservée et PlayerFragment peut
+    // continuer à contrôler l'audio sans crash au retour.
+    override fun onDestroyView() {
         if (isBound) {
             requireContext().unbindService(serviceConnection)
             isBound = false
+            playerService = null
         }
-    }
-
-    override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
     }
