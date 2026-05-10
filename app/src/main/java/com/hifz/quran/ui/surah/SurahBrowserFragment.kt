@@ -6,7 +6,6 @@ import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
@@ -107,7 +106,10 @@ class SurahBrowserFragment : Fragment() {
         if (alreadyExists) {
             MaterialAlertDialogBuilder(requireContext())
                 .setTitle("Déjà importée")
-                .setMessage("${surah.nameArabic} (${surah.nameLatin}) est déjà dans ta bibliothèque avec ce récitateur.\n\nOuvrir la sourate ?")
+                .setMessage(
+                    "${surah.nameArabic} (${surah.nameLatin}) est déjà dans ta bibliothèque " +
+                    "avec ce récitateur.\n\nOuvrir la sourate ?"
+                )
                 .setPositiveButton("Ouvrir") { _, _ ->
                     val id = vm.getExistingSurahId(surah.number, selectedReciter.id)
                     if (id != null) openPlayer(id)
@@ -123,8 +125,8 @@ class SurahBrowserFragment : Fragment() {
                 "${surah.nameArabic}\n${surah.nameLatin} — ${surah.nameFr}\n\n" +
                 "📖 ${surah.verseCount} versets\n" +
                 "🎙️ ${selectedReciter.displayName}\n\n" +
-                "Les versets seront streamés depuis everyayah.com.\n" +
-                "Le texte arabe sera téléchargé (~10 Ko)."
+                "Le texte arabe sera téléchargé (~10 Ko).\n" +
+                "L'audio est streamé verset par verset."
             )
             .setPositiveButton("Importer") { _, _ ->
                 importSurah(surah)
@@ -138,15 +140,17 @@ class SurahBrowserFragment : Fragment() {
         binding.tvImportStatus.visibility = View.VISIBLE
         binding.tvImportStatus.text = "⏳ Importation de ${surah.nameLatin}…"
 
-        vm.importSurahFromLibrary(surah, selectedReciter) { result ->
+        // FIX BUILD : importSurahFromLibrary(surah, reciter) { result -> ... }
+        // Le lambda reçoit un Long, type maintenant explicite dans SurahViewModel
+        vm.importSurahFromLibrary(surah, selectedReciter) { result: Long ->
+            if (_binding == null) return@importSurahFromLibrary
             binding.progressImport.visibility = View.GONE
             when {
                 result > 0 -> {
                     binding.tvImportStatus.text = "✅ ${surah.nameLatin} importée !"
                     binding.tvImportStatus.postDelayed({
-                        binding.tvImportStatus.visibility = View.GONE
+                        if (_binding != null) binding.tvImportStatus.visibility = View.GONE
                     }, 2500)
-                    // Ouvrir directement le player
                     openPlayer(result)
                 }
                 else -> {
@@ -159,8 +163,10 @@ class SurahBrowserFragment : Fragment() {
 
     private fun openPlayer(sourateId: Long) {
         val fragment = PlayerFragment.newInstance(sourateId)
+        // FIX BUILD : loadFragment(fragment) → loadFragment(fragment, tag)
+        // MainActivity.loadFragment() exige maintenant un tag (fix navigation crash)
         (activity as? MainActivity)?.apply {
-            loadFragment(fragment)
+            loadFragment(fragment, PlayerFragment::class.java.simpleName)
             navigateTo(R.id.nav_player)
         }
     }
