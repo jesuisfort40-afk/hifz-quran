@@ -16,7 +16,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.hifz.quran.R
-import com.hifz.quran.data.QuranData
 import com.hifz.quran.databinding.FragmentPlayerBinding
 import com.hifz.quran.model.Sourate
 import com.hifz.quran.model.Verset
@@ -30,29 +29,34 @@ class PlayerFragment : Fragment() {
     private val binding get() = _binding!!
     private lateinit var vm: PlayerViewModel
     private var playerService: AudioPlayerService? = null
-    private var isBound = false
+    private var isBound                 = false
+    private var serviceObserverAttached = false
     private lateinit var versetAdapter: VersetAdapter
 
-    private var isSeeking             = false
-    private var isSegmentMode         = false
-    private var serviceObserverAttached = false
+    private var isSeeking     = false
+    private var isSegmentMode = false
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             val binder = service as AudioPlayerService.PlayerBinder
             playerService = binder.getService()
             isBound = true
+
             if (!serviceObserverAttached) {
                 observePlayerState()
                 serviceObserverAttached = true
             }
-            vm.currentSourate.value?.let { sourate ->
-                val svc = playerService ?: return
-                if (svc.getCurrentPosition() == 0L && !svc.isPlaying()) {
-                    loadSourate(sourate)
-                }
+
+            // Charger la sourate si déjà disponible ET si le service ne joue pas déjà
+            val sourate = vm.currentSourate.value ?: return
+            val svc = playerService ?: return
+            val alreadyPlaying = svc.isPlaying() &&
+                    svc.isStreamingMode() == sourate.isFromLibrary
+            if (!alreadyPlaying) {
+                loadSourateIntoService(sourate, vm.versets.value ?: emptyList())
             }
         }
+
         override fun onServiceDisconnected(name: ComponentName?) {
             isBound = false
             playerService = null
@@ -168,8 +172,18 @@ class PlayerFragment : Fragment() {
         vm.currentSourate.observe(viewLifecycleOwner) { sourate ->
             if (sourate != null) {
                 binding.tvSourateName.text   = sourate.name
-                binding.tvSourateArabic.text = sourate.arabicName.ifEmpty { "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ" }
-                if (isBound) loadSourate(sourate)
+                binding.tvSourateArabic.text = sourate.arabicName.ifEmpty {
+                    "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ"
+                }
+                // Masquer le seekbar en mode streaming (la durée par verset varie)
+                // et afficher un indicateur "Verset X / Y" à la place
+                if (sourate.isFromLibrary) {
+                    binding.seekBar.visibility = View.INVISIBLE
+                    binding.tvStreamingHint.visibility = View.VISIBLE
+                } else {
+                    binding.seekBar.visibility = View.VISIBLE
+                    binding.tvStreamingHint.visibility = View.GONE
+                }
             } else {
                 binding.tvSourateName.text   = "Aucune sourate sélectionnée"
                 binding.tvSourateArabic.text = "Ajoutez une sourate depuis la bibliothèque"
@@ -179,6 +193,18 @@ class PlayerFragment : Fragment() {
         vm.versets.observe(viewLifecycleOwner) { list ->
             versetAdapter.submitList(list)
             binding.tvNoVersets.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
+
+            // BUG FIX streaming ne démarre pas :
+            // On lance loadStreaming() ici, quand les versets sont disponibles.
+            // C'est le bon endroit car : sourate chargée + versets en base + service bindé.
+            val sourate = vm.currentSourate.value ?: return@observe
+            if (sourate.isFromLibrary && list.isNotEmpty() && isBound) {
+                val svc = playerService ?: return@observe
+                // Ne relancer que si pas déjà en train de streamer cette sourate
+                if (!svc.isStreamingReady() || !svc.isPlaying()) {
+                    loadSourateIntoService(sourate, list)
+                }
+            }
         }
 
         vm.loopEnabled.observe(viewLifecycleOwner) { enabled ->
@@ -197,19 +223,35 @@ class PlayerFragment : Fragment() {
             if (_binding == null || isSeeking) return@observe
 
             val dur = state.duration
+
+            // BUG FIX 0:00 / 0:00 en mode streaming :
+            // En streaming, la durée est connue seulement après buffering.
+            // On met à jour le seekbar uniquement si la durée est réelle (> 0).
             if (dur > 0L) {
                 binding.seekBar.max = dur.toInt()
                 if (isSegmentMode) {
                     binding.seekSegmentStart.max = dur.toInt()
                     binding.seekSegmentEnd.max   = dur.toInt()
                 }
+                binding.tvDuration.text = TimeUtils.formatMs(dur)
+            } else {
+                // Durée inconnue → afficher "..." pour indiquer le chargement
+                binding.tvDuration.text = if (state.isPlaying || state.currentPosition > 0)
+                    "…" else "0:00"
             }
-            binding.seekBar.progress       = state.currentPosition.toInt()
-            binding.tvCurrentTime.text     = TimeUtils.formatMs(state.currentPosition)
-            binding.tvDuration.text        = TimeUtils.formatMs(dur)
-            binding.btnPlayPause.setImageResource(if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play)
+
+            binding.seekBar.progress   = state.currentPosition.toInt()
+            binding.tvCurrentTime.text = TimeUtils.formatMs(state.currentPosition)
+
+            binding.btnPlayPause.setImageResource(
+                if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+            )
             binding.tvSpeed.text = "${"%.2f".format(state.speed)}x"
 
+            // Surbrillance du verset actif dans la liste
+            state.versetId?.let { versetAdapter.setActiveVerset(it) }
+
+            // Indicateur boucle
             if (state.loopEnabled) {
                 val max = if (state.loopCount == 0) "∞" else "${state.loopCount}"
                 binding.tvLoopProgress.text = "${state.loopCurrent + 1}/$max"
@@ -217,33 +259,33 @@ class PlayerFragment : Fragment() {
             } else {
                 binding.tvLoopProgress.visibility = View.GONE
             }
+
+            // Indicateur verset en cours (mode streaming)
+            val svc = playerService
+            if (svc != null && svc.isStreamingMode()) {
+                val idx   = svc.getCurrentStreamingVersetIndex()
+                val total = vm.versets.value?.size ?: 0
+                binding.tvStreamingHint.text = "Verset ${idx + 1} / $total"
+                binding.tvStreamingHint.visibility = View.VISIBLE
+            }
         }
     }
 
     /**
-     * Charge une sourate dans le player.
-     *
-     * FIX STREAMING : si la sourate vient de la bibliothèque (isFromLibrary),
-     * on utilise loadStreaming() avec les versets déjà en base.
-     * Sinon, on utilise loadAudio() avec le fichier local.
+     * Charge la sourate dans le service audio.
+     * Mode streaming si isFromLibrary, fichier local sinon.
      */
-    private fun loadSourate(sourate: Sourate) {
+    private fun loadSourateIntoService(sourate: Sourate, versets: List<Verset>) {
         val svc = playerService ?: return
         if (sourate.isFromLibrary) {
-            // Mode streaming : les versets sont en base, l'audio vient d'everyayah
-            val versets = vm.versets.value
-            if (!versets.isNullOrEmpty()) {
-                svc.loadStreaming(
-                    versets        = versets,
-                    sourateId      = sourate.id,
-                    sourateNumber  = sourate.sourateNumber,
-                    reciterId      = sourate.reciterId
-                )
-            }
-            // Si les versets ne sont pas encore chargés, l'observer vm.versets déclenchera
-            // un re-appel quand ils arrivent
+            if (versets.isEmpty()) return
+            svc.loadStreaming(
+                versets        = versets,
+                sourateId      = sourate.id,
+                sourateNumber  = sourate.sourateNumber,
+                reciterId      = sourate.reciterId
+            )
         } else {
-            // Mode fichier local (import manuel)
             if (sourate.filePath.isBlank()) return
             svc.loadAudio(Uri.parse(sourate.filePath), sourate.id)
         }
@@ -251,10 +293,10 @@ class PlayerFragment : Fragment() {
 
     private fun playVerset(verset: Verset) {
         val sourate = vm.currentSourate.value ?: return
-        val svc     = playerService ?: return
+        val svc     = playerService           ?: return
 
         if (sourate.isFromLibrary) {
-            // Mode streaming : on saute directement à ce verset dans la liste
+            // Mode streaming : chercher l'index du verset et sauter dessus
             val versets = vm.versets.value ?: return
             val index = versets.indexOfFirst { it.id == verset.id }
             if (index >= 0) {
@@ -262,7 +304,7 @@ class PlayerFragment : Fragment() {
                 svc.setLoop(vm.loopEnabled.value ?: false, vm.loopCount.value ?: 3)
             }
         } else {
-            // Mode fichier local : on clipe sur la plage startMs–endMs
+            // Mode fichier local
             if (sourate.filePath.isBlank()) return
             svc.loadAudio(
                 uri       = Uri.parse(sourate.filePath),
