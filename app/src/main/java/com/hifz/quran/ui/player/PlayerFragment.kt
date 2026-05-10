@@ -16,6 +16,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.hifz.quran.R
+import com.hifz.quran.data.QuranData
 import com.hifz.quran.databinding.FragmentPlayerBinding
 import com.hifz.quran.model.Sourate
 import com.hifz.quran.model.Verset
@@ -32,35 +33,20 @@ class PlayerFragment : Fragment() {
     private var isBound = false
     private lateinit var versetAdapter: VersetAdapter
 
-    private var isSeeking    = false
-    private var isSegmentMode = false
+    private var isSeeking             = false
+    private var isSegmentMode         = false
     private var serviceObserverAttached = false
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // BUG FIX #1 — Navigation crash (ServiceConnection)
-    //
-    // AVANT : onStop() appelait unbindService() → à chaque changement d'onglet
-    //         playerService passait à null. Au retour, bindService() relançait
-    //         une connexion asynchrone. Entre temps, tout clic sur Play crashait
-    //         avec NullPointerException.
-    //
-    // APRÈS : onStop() ne fait RIEN (on garde la connexion vivante).
-    //         unbindService() est uniquement dans onDestroyView() (destruction réelle).
-    //         Effet : playerService reste valide entre les changements d'onglet.
-    // ─────────────────────────────────────────────────────────────────────────
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             val binder = service as AudioPlayerService.PlayerBinder
             playerService = binder.getService()
             isBound = true
-            // Attacher l'observer d'état une seule fois
             if (!serviceObserverAttached) {
                 observePlayerState()
                 serviceObserverAttached = true
             }
-            // Charger la sourate si déjà sélectionnée
             vm.currentSourate.value?.let { sourate ->
-                // Ne pas re-déclencher loadAudio si le service joue déjà cette sourate
                 val svc = playerService ?: return
                 if (svc.getCurrentPosition() == 0L && !svc.isPlaying()) {
                     loadSourate(sourate)
@@ -99,7 +85,6 @@ class PlayerFragment : Fragment() {
         setupControls()
         observeViewModel()
 
-        // Démarrer et binder le service audio
         val intent = Intent(requireContext(), AudioPlayerService::class.java)
         requireContext().startForegroundService(intent)
         requireContext().bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
@@ -118,7 +103,6 @@ class PlayerFragment : Fragment() {
     private fun setupControls() {
         binding.btnPlayPause.setOnClickListener { playerService?.togglePlayPause() }
 
-        // SeekBar position globale
         binding.seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
                 if (fromUser) binding.tvCurrentTime.text = TimeUtils.formatMs(progress.toLong())
@@ -130,52 +114,33 @@ class PlayerFragment : Fragment() {
             }
         })
 
-        // Segment start
         binding.seekSegmentStart.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
-                if (fromUser) {
-                    vm.setSegmentStart(p.toLong())
-                    binding.tvSegmentStart.text = TimeUtils.formatMs(p.toLong())
-                }
+                if (fromUser) { vm.setSegmentStart(p.toLong()); binding.tvSegmentStart.text = TimeUtils.formatMs(p.toLong()) }
             }
             override fun onStartTrackingTouch(sb: SeekBar) {}
             override fun onStopTrackingTouch(sb: SeekBar) { applySegment() }
         })
 
-        // Segment end
         binding.seekSegmentEnd.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
-                if (fromUser) {
-                    vm.setSegmentEnd(p.toLong())
-                    binding.tvSegmentEnd.text = TimeUtils.formatMs(p.toLong())
-                }
+                if (fromUser) { vm.setSegmentEnd(p.toLong()); binding.tvSegmentEnd.text = TimeUtils.formatMs(p.toLong()) }
             }
             override fun onStartTrackingTouch(sb: SeekBar) {}
             override fun onStopTrackingTouch(sb: SeekBar) { applySegment() }
         })
 
-        // Mode segment
         binding.btnSegmentMode.setOnClickListener {
             isSegmentMode = !isSegmentMode
             binding.layoutSegment.visibility = if (isSegmentMode) View.VISIBLE else View.GONE
             binding.btnSegmentMode.isSelected = isSegmentMode
         }
 
-        // Boucle toggle
         binding.btnLoop.setOnClickListener { vm.toggleLoop() }
-
-        // Compteur de boucles
-        binding.btnLoopMinus.setOnClickListener {
-            vm.setLoopCount(maxOf(0, (vm.loopCount.value ?: 3) - 1))
-        }
-        binding.btnLoopPlus.setOnClickListener {
-            vm.setLoopCount(minOf(20, (vm.loopCount.value ?: 3) + 1))
-        }
-
-        // Vitesse
+        binding.btnLoopMinus.setOnClickListener { vm.setLoopCount(maxOf(0, (vm.loopCount.value ?: 3) - 1)) }
+        binding.btnLoopPlus.setOnClickListener  { vm.setLoopCount(minOf(20, (vm.loopCount.value ?: 3) + 1)) }
         binding.btnSpeed.setOnClickListener { showSpeedPicker() }
 
-        // Marquer position start/end depuis le player
         binding.btnMarkStart.setOnClickListener {
             val pos = playerService?.getCurrentPosition() ?: 0L
             vm.setSegmentStart(pos)
@@ -191,10 +156,7 @@ class PlayerFragment : Fragment() {
             applySegment()
         }
 
-        // Sauvegarder verset
         binding.btnSaveVerset.setOnClickListener { showSaveVersetDialog() }
-
-        // Ajouter verset → ouvrir mode segment
         binding.btnAddVerset.setOnClickListener {
             isSegmentMode = true
             binding.layoutSegment.visibility = View.VISIBLE
@@ -206,10 +168,7 @@ class PlayerFragment : Fragment() {
         vm.currentSourate.observe(viewLifecycleOwner) { sourate ->
             if (sourate != null) {
                 binding.tvSourateName.text   = sourate.name
-                binding.tvSourateArabic.text = sourate.arabicName.ifEmpty {
-                    "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ"
-                }
-                // Charger seulement si le service est prêt
+                binding.tvSourateArabic.text = sourate.arabicName.ifEmpty { "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ" }
                 if (isBound) loadSourate(sourate)
             } else {
                 binding.tvSourateName.text   = "Aucune sourate sélectionnée"
@@ -222,17 +181,6 @@ class PlayerFragment : Fragment() {
             binding.tvNoVersets.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        // BUG FIX #6 — Boucle s'arrête après 1x
-        //
-        // AVANT : loopEnabled/loopCount changeaient dans le ViewModel mais
-        //         setLoop() sur le service n'était appelé qu'une fois à l'observer.
-        //         Si l'utilisateur changeait loopCount APRÈS avoir lancé la lecture,
-        //         le service gardait l'ancien compte → s'arrêtait trop tôt.
-        //
-        // APRÈS : à chaque changement de loopEnabled ou loopCount, setLoop()
-        //         est re-appelé sur le service avec les valeurs actuelles.
-        // ─────────────────────────────────────────────────────────────────────
         vm.loopEnabled.observe(viewLifecycleOwner) { enabled ->
             binding.btnLoop.isSelected = enabled
             playerService?.setLoop(enabled, vm.loopCount.value ?: 3)
@@ -246,8 +194,7 @@ class PlayerFragment : Fragment() {
 
     private fun observePlayerState() {
         playerService?.playerState?.observe(viewLifecycleOwner) { state ->
-            if (_binding == null) return@observe
-            if (isSeeking) return@observe
+            if (_binding == null || isSeeking) return@observe
 
             val dur = state.duration
             if (dur > 0L) {
@@ -257,13 +204,10 @@ class PlayerFragment : Fragment() {
                     binding.seekSegmentEnd.max   = dur.toInt()
                 }
             }
-            binding.seekBar.progress = state.currentPosition.toInt()
-            binding.tvCurrentTime.text = TimeUtils.formatMs(state.currentPosition)
-            binding.tvDuration.text    = TimeUtils.formatMs(dur)
-
-            binding.btnPlayPause.setImageResource(
-                if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play
-            )
+            binding.seekBar.progress       = state.currentPosition.toInt()
+            binding.tvCurrentTime.text     = TimeUtils.formatMs(state.currentPosition)
+            binding.tvDuration.text        = TimeUtils.formatMs(dur)
+            binding.btnPlayPause.setImageResource(if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play)
             binding.tvSpeed.text = "${"%.2f".format(state.speed)}x"
 
             if (state.loopEnabled) {
@@ -276,36 +220,65 @@ class PlayerFragment : Fragment() {
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // BUG FIX #7 — Crash lecture après import
-    // On vérifie que le filePath est non vide avant de passer à loadAudio
-    // ─────────────────────────────────────────────────────────────────────────
+    /**
+     * Charge une sourate dans le player.
+     *
+     * FIX STREAMING : si la sourate vient de la bibliothèque (isFromLibrary),
+     * on utilise loadStreaming() avec les versets déjà en base.
+     * Sinon, on utilise loadAudio() avec le fichier local.
+     */
     private fun loadSourate(sourate: Sourate) {
-        if (sourate.filePath.isBlank()) return
-        playerService?.loadAudio(Uri.parse(sourate.filePath), sourate.id)
+        val svc = playerService ?: return
+        if (sourate.isFromLibrary) {
+            // Mode streaming : les versets sont en base, l'audio vient d'everyayah
+            val versets = vm.versets.value
+            if (!versets.isNullOrEmpty()) {
+                svc.loadStreaming(
+                    versets        = versets,
+                    sourateId      = sourate.id,
+                    sourateNumber  = sourate.sourateNumber,
+                    reciterId      = sourate.reciterId
+                )
+            }
+            // Si les versets ne sont pas encore chargés, l'observer vm.versets déclenchera
+            // un re-appel quand ils arrivent
+        } else {
+            // Mode fichier local (import manuel)
+            if (sourate.filePath.isBlank()) return
+            svc.loadAudio(Uri.parse(sourate.filePath), sourate.id)
+        }
     }
 
     private fun playVerset(verset: Verset) {
         val sourate = vm.currentSourate.value ?: return
-        if (sourate.filePath.isBlank()) return
-        playerService?.apply {
-            loadAudio(
+        val svc     = playerService ?: return
+
+        if (sourate.isFromLibrary) {
+            // Mode streaming : on saute directement à ce verset dans la liste
+            val versets = vm.versets.value ?: return
+            val index = versets.indexOfFirst { it.id == verset.id }
+            if (index >= 0) {
+                svc.seekToVerset(index)
+                svc.setLoop(vm.loopEnabled.value ?: false, vm.loopCount.value ?: 3)
+            }
+        } else {
+            // Mode fichier local : on clipe sur la plage startMs–endMs
+            if (sourate.filePath.isBlank()) return
+            svc.loadAudio(
                 uri       = Uri.parse(sourate.filePath),
                 sourateId = sourate.id,
                 startMs   = verset.startMs,
                 endMs     = verset.endMs
             )
-            setVersetId(verset.id)
-            setLoop(vm.loopEnabled.value ?: false, vm.loopCount.value ?: 3)
-            play()
+            svc.setVersetId(verset.id)
+            svc.setLoop(vm.loopEnabled.value ?: false, vm.loopCount.value ?: 3)
+            svc.play()
         }
         vm.incrementRepeat(verset.id)
     }
 
     private fun applySegment() {
-        val start = vm.segmentStart.value ?: 0L
-        val end   = vm.segmentEnd.value   ?: 0L
-        playerService?.setSegment(start, end)
+        playerService?.setSegment(vm.segmentStart.value ?: 0L, vm.segmentEnd.value ?: 0L)
     }
 
     private fun showSpeedPicker() {
@@ -343,10 +316,6 @@ class PlayerFragment : Fragment() {
             .setNegativeButton("Annuler", null).show()
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // BUG FIX #1 — unbindService déplacé de onStop() vers onDestroyView()
-    // onStop() est retiré complètement : la connexion est conservée entre onglets.
-    // ─────────────────────────────────────────────────────────────────────────
     override fun onDestroyView() {
         if (isBound) {
             requireContext().unbindService(serviceConnection)
