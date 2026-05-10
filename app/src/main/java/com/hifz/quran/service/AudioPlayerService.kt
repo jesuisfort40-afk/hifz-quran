@@ -16,7 +16,9 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.hifz.quran.MainActivity
 import com.hifz.quran.R
+import com.hifz.quran.data.QuranData
 import com.hifz.quran.model.PlayerState
+import com.hifz.quran.model.Verset
 import kotlinx.coroutines.*
 
 class AudioPlayerService : LifecycleService() {
@@ -31,37 +33,31 @@ class AudioPlayerService : LifecycleService() {
     val playerState = MutableLiveData(PlayerState())
 
     // ─── État boucle ──────────────────────────────────────────────────────────
-    private var loopCount    = 3      // nombre de répétitions voulu (0 = infini)
-    private var currentLoop  = 0      // compteur de répétitions effectuées
-    private var loopEnabled  = false
-    private var segmentStart = 0L
-    private var segmentEnd   = 0L
+    private var loopCount         = 3
+    private var currentLoop       = 0
+    private var loopEnabled       = false
+    private var segmentStart      = 0L
+    private var segmentEnd        = 0L
     private var currentSourateId  = -1L
     private var currentVersetId: Long? = null
+
+    // ─── Streaming mode (bibliothèque intégrée) ───────────────────────────────
+    private var streamingMode     = false   // true = versets streamés depuis everyayah
+    private var streamingVersets  = listOf<Verset>()
+    private var streamingReciterId = ""
+    private var streamingSourateNumber = 0
+    private var streamingVersetIndex = 0    // index courant dans la liste
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var progressJob: Job? = null
 
     companion object {
-        const val CHANNEL_ID         = "hifz_player_channel"
-        const val NOTIF_ID           = 1001
-        const val ACTION_PLAY_PAUSE  = "com.hifz.quran.PLAY_PAUSE"
-        const val ACTION_STOP        = "com.hifz.quran.STOP"
+        const val CHANNEL_ID        = "hifz_player_channel"
+        const val NOTIF_ID          = 1001
+        const val ACTION_PLAY_PAUSE = "com.hifz.quran.PLAY_PAUSE"
+        const val ACTION_STOP       = "com.hifz.quran.STOP"
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // BUG FIX #4 — Audio continue après fermeture de l'app
-    // BUG FIX #5 — Notification ne se ferme pas (bouton Stop ignoré)
-    //
-    // AVANT : onStartCommand() absent → les actions ACTION_STOP et ACTION_PLAY_PAUSE
-    //         envoyées depuis les boutons de notification n'étaient jamais traitées.
-    //         De plus les PendingIntent utilisaient getBroadcast() avec un Intent
-    //         implicite, ignoré silencieusement sur Android 8+ (OREO).
-    //
-    // APRÈS : onStartCommand() intercepte les actions. stopPlayback() appelle
-    //         stopForeground(STOP_FOREGROUND_REMOVE) + stopSelf() → le service
-    //         s'arrête proprement et la notification disparaît.
-    // ─────────────────────────────────────────────────────────────────────────
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
         when (intent?.action) {
@@ -83,26 +79,15 @@ class AudioPlayerService : LifecycleService() {
         return binder
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // BUG FIX #6 — Boucle s'arrête après 1 lecture au lieu de N
-    //
-    // AVANT : le listener onPlaybackStateChanged traitait STATE_ENDED UNIQUEMENT
-    //         si segmentEnd > 0, ce qui excluait la lecture d'une sourate complète
-    //         sans segment défini. De plus le compteur currentLoop n'était pas
-    //         remis à zéro entre deux appels à loadAudio() différents.
-    //         Résultat : après 1 lecture, la boucle pensait avoir déjà atteint
-    //         son quota et s'arrêtait.
-    //
-    // APRÈS : STATE_ENDED gère tous les cas (avec ou sans segment). currentLoop
-    //         est remis à 0 dans loadAudio() et setLoop(). La logique de répétition
-    //         dans le coroutine progressJob est unifiée avec celle du listener.
-    // ─────────────────────────────────────────────────────────────────────────
     private fun setupPlayerListener() {
         player.addListener(object : Player.Listener {
-
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) {
-                    handleLoopOnEnd()
+                    if (streamingMode) {
+                        handleStreamingEnd()
+                    } else {
+                        handleLoopOnEnd()
+                    }
                 }
                 emitState()
             }
@@ -115,49 +100,19 @@ class AudioPlayerService : LifecycleService() {
         })
     }
 
+    // ─── Mode fichier local ───────────────────────────────────────────────────
     /**
-     * Logique de boucle appelée quand la lecture se termine naturellement (STATE_ENDED)
-     * ou quand le segment de fin est atteint (depuis le progressJob).
+     * Charge un fichier audio local (mode legacy / import manuel).
+     * filePath non vide obligatoire.
      */
-    private fun handleLoopOnEnd() {
-        if (!loopEnabled) return
-
-        val shouldContinue = loopCount == 0 || currentLoop < loopCount - 1
-        if (shouldContinue) {
-            currentLoop++
-            player.seekTo(segmentStart)
-            player.play()
-        } else {
-            // Toutes les répétitions effectuées
-            currentLoop = 0
-            player.seekTo(segmentStart)
-            player.pause()
-        }
-        emitState()
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // BUG FIX #7 — Crash à la lecture après ajout bibliothèque
-    //
-    // AVANT : loadAudio() était appelé depuis observeViewModel() dès que
-    //         currentSourate changeait, MÊME si playerService n'était pas encore
-    //         connecté (isBound = false). Cela provoquait une lecture sur un
-    //         ExoPlayer non préparé, ou une tentative de lire une URI invalide.
-    //
-    // APRÈS : loadAudio() vérifie que l'URI est non vide avant de préparer le
-    //         player. Le player est stop() avant chaque nouveau setMediaItem()
-    //         pour éviter les états incohérents.
-    // ─────────────────────────────────────────────────────────────────────────
     fun loadAudio(uri: Uri, sourateId: Long, startMs: Long = 0L, endMs: Long = 0L) {
         if (uri.toString().isBlank()) return
-
-        // Remettre à zéro le compteur de boucle pour le nouveau fichier
+        streamingMode = false
         currentLoop      = 0
         currentSourateId = sourateId
         segmentStart     = startMs
         segmentEnd       = endMs
 
-        // Arrêter proprement l'éventuelle lecture en cours avant de charger le nouveau media
         player.stop()
 
         val mediaItem = if (endMs > startMs) {
@@ -179,6 +134,95 @@ class AudioPlayerService : LifecycleService() {
         startForeground(NOTIF_ID, buildNotification())
     }
 
+    // ─── Mode streaming (bibliothèque intégrée) ───────────────────────────────
+    /**
+     * Configure le mode streaming pour une sourate de la bibliothèque.
+     * Chaque verset est streamé individuellement depuis everyayah.com.
+     *
+     * @param versets       liste des versets en base (numero 1-based)
+     * @param sourateId     id Room de la sourate
+     * @param sourateNumber numéro de sourate 1–114
+     * @param reciterId     ex: "Alafasy_128kbps"
+     * @param startVersetIndex  index (0-based) du verset à jouer en premier
+     */
+    fun loadStreaming(
+        versets: List<Verset>,
+        sourateId: Long,
+        sourateNumber: Int,
+        reciterId: String,
+        startVersetIndex: Int = 0
+    ) {
+        if (versets.isEmpty()) return
+        streamingMode          = true
+        streamingVersets       = versets
+        streamingSourateNumber = sourateNumber
+        streamingReciterId     = reciterId
+        streamingVersetIndex   = startVersetIndex.coerceIn(0, versets.size - 1)
+        currentLoop            = 0
+        currentSourateId       = sourateId
+
+        playStreamingVerset(streamingVersetIndex)
+        startForeground(NOTIF_ID, buildNotification())
+    }
+
+    private fun playStreamingVerset(index: Int) {
+        val verset = streamingVersets.getOrNull(index) ?: return
+        currentVersetId = verset.id
+        val url = QuranData.getVerseUrl(streamingReciterId, streamingSourateNumber, verset.numero)
+
+        player.stop()
+        player.setMediaItem(MediaItem.fromUri(Uri.parse(url)))
+        player.prepare()
+        player.play()
+    }
+
+    /**
+     * Appelé quand un verset streamé se termine.
+     * Gère la boucle (sur le verset courant) ou passe au suivant.
+     */
+    private fun handleStreamingEnd() {
+        if (loopEnabled) {
+            val shouldContinue = loopCount == 0 || currentLoop < loopCount - 1
+            if (shouldContinue) {
+                currentLoop++
+                // Rejouer le même verset
+                playStreamingVerset(streamingVersetIndex)
+                emitState()
+                return
+            } else {
+                currentLoop = 0
+            }
+        }
+        // Passer au verset suivant
+        val next = streamingVersetIndex + 1
+        if (next < streamingVersets.size) {
+            streamingVersetIndex = next
+            playStreamingVerset(next)
+        } else {
+            // Fin de la sourate
+            streamingVersetIndex = 0
+            player.pause()
+        }
+        emitState()
+    }
+
+    // ─── Boucle (mode fichier local) ──────────────────────────────────────────
+    private fun handleLoopOnEnd() {
+        if (!loopEnabled) return
+        val shouldContinue = loopCount == 0 || currentLoop < loopCount - 1
+        if (shouldContinue) {
+            currentLoop++
+            player.seekTo(segmentStart)
+            player.play()
+        } else {
+            currentLoop = 0
+            player.seekTo(segmentStart)
+            player.pause()
+        }
+        emitState()
+    }
+
+    // ─── Contrôles communs ────────────────────────────────────────────────────
     fun play()  { player.play() }
     fun pause() { player.pause() }
 
@@ -188,6 +232,7 @@ class AudioPlayerService : LifecycleService() {
 
     fun stopPlayback() {
         player.stop()
+        streamingMode = false
         currentLoop = 0
         stopProgressUpdates()
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -199,15 +244,23 @@ class AudioPlayerService : LifecycleService() {
         emitState()
     }
 
+    /** Saute directement à un verset (mode streaming uniquement) */
+    fun seekToVerset(versetIndex: Int) {
+        if (!streamingMode) return
+        streamingVersetIndex = versetIndex.coerceIn(0, streamingVersets.size - 1)
+        currentLoop = 0
+        playStreamingVerset(streamingVersetIndex)
+    }
+
     fun setSegment(startMs: Long, endMs: Long) {
         segmentStart = startMs
         segmentEnd   = endMs
     }
 
     fun setLoop(enabled: Boolean, count: Int = 3) {
-        loopEnabled  = enabled
-        loopCount    = count
-        currentLoop  = 0          // ← reset crucial pour éviter bug "s'arrête après 1x"
+        loopEnabled = enabled
+        loopCount   = count
+        currentLoop = 0
         player.repeatMode = Player.REPEAT_MODE_OFF
         emitState()
     }
@@ -222,25 +275,20 @@ class AudioPlayerService : LifecycleService() {
     fun getCurrentPosition(): Long = player.currentPosition
     fun getDuration(): Long = player.duration.coerceAtLeast(0L)
     fun isPlaying(): Boolean = player.isPlaying
+    fun isStreamingMode(): Boolean = streamingMode
+    fun getCurrentStreamingVersetIndex(): Int = streamingVersetIndex
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Coroutine qui met à jour la position toutes les 250 ms
-    // et détecte le dépassement du segment de fin pour la boucle.
-    // ─────────────────────────────────────────────────────────────────────────
+    // ─── Progression ─────────────────────────────────────────────────────────
     private fun startProgressUpdates() {
         progressJob?.cancel()
         progressJob = serviceScope.launch {
             while (isActive) {
                 emitState()
-
-                // Détection de fin de segment (pour la boucle dans un segment)
-                if (loopEnabled && segmentEnd > 0L &&
-                    player.isPlaying &&
-                    player.currentPosition >= segmentEnd
+                if (!streamingMode && loopEnabled && segmentEnd > 0L &&
+                    player.isPlaying && player.currentPosition >= segmentEnd
                 ) {
                     handleLoopOnEnd()
                 }
-
                 delay(250)
             }
         }
@@ -269,23 +317,13 @@ class AudioPlayerService : LifecycleService() {
         )
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // BUG FIX #5 — Notification ne se ferme pas
-    //
-    // AVANT : PendingIntent.getBroadcast() avec Intent implicite → ignoré Android 8+
-    //         setOngoing(true) en dur → notification impossible à balayer même en pause
-    //
-    // APRÈS : PendingIntent.getService() avec Intent EXPLICITE (composant défini).
-    //         setOngoing() dynamique : true seulement si en lecture, false en pause.
-    // ─────────────────────────────────────────────────────────────────────────
+    // ─── Notification ─────────────────────────────────────────────────────────
     private fun buildNotification(): Notification {
         val mainIntent = PendingIntent.getActivity(
             this, 0,
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE
         )
-
-        // Intent explicite vers le service lui-même (fonctionne sur tous les Android)
         val playPauseIntent = PendingIntent.getService(
             this, 0,
             Intent(this, AudioPlayerService::class.java).apply { action = ACTION_PLAY_PAUSE },
@@ -296,36 +334,27 @@ class AudioPlayerService : LifecycleService() {
             Intent(this, AudioPlayerService::class.java).apply { action = ACTION_STOP },
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-
         val isPlaying = player.isPlaying
-
         return Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("Hifz Quran")
             .setContentText(if (isPlaying) "En lecture..." else "En pause")
             .setSmallIcon(R.drawable.ic_quran)
             .setContentIntent(mainIntent)
-            .addAction(
-                Notification.Action.Builder(
-                    null,
-                    if (isPlaying) "Pause" else "Reprendre",
-                    playPauseIntent
-                ).build()
-            )
+            .addAction(Notification.Action.Builder(
+                null, if (isPlaying) "Pause" else "Reprendre", playPauseIntent
+            ).build())
             .addAction(Notification.Action.Builder(null, "Arrêter", stopIntent).build())
-            .setOngoing(isPlaying)  // ← balayable en pause, bloquée en lecture
+            .setOngoing(isPlaying)
             .build()
     }
 
     private fun updateNotification() {
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.notify(NOTIF_ID, buildNotification())
+        getSystemService(NotificationManager::class.java).notify(NOTIF_ID, buildNotification())
     }
 
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Lecture Coran",
-            NotificationManager.IMPORTANCE_LOW
+            CHANNEL_ID, "Lecture Coran", NotificationManager.IMPORTANCE_LOW
         ).apply { description = "Contrôle de lecture audio" }
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
