@@ -9,6 +9,7 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
+import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.hifz.quran.R
 import com.hifz.quran.data.QuranData
@@ -54,7 +55,9 @@ class SurahBrowserFragment : Fragment() {
     }
 
     private fun showReciterPicker() {
-        val names = QuranData.RECITERS.map { "${it.nameArabic} — ${it.displayName}" }.toTypedArray()
+        val names = QuranData.RECITERS
+            .map { "${it.nameArabic} — ${it.displayName}" }
+            .toTypedArray()
         val currentIdx = QuranData.RECITERS.indexOf(selectedReciter).coerceAtLeast(0)
 
         MaterialAlertDialogBuilder(requireContext())
@@ -80,12 +83,15 @@ class SurahBrowserFragment : Fragment() {
 
     private fun filterSurahs(query: String) {
         val q = query.trim().lowercase()
-        val filtered = if (q.isEmpty()) allSurahs
-        else allSurahs.filter {
-            it.nameLatin.lowercase().contains(q) ||
+        val filtered = if (q.isEmpty()) {
+            allSurahs
+        } else {
+            allSurahs.filter {
+                it.nameLatin.lowercase().contains(q) ||
                 it.nameFr.lowercase().contains(q) ||
                 it.nameArabic.contains(q) ||
                 it.number.toString() == q
+            }
         }
         browserAdapter.submitList(filtered)
         binding.tvResultCount.text = "${filtered.size} sourates"
@@ -95,14 +101,17 @@ class SurahBrowserFragment : Fragment() {
         browserAdapter = SurahBrowserAdapter { surah ->
             confirmImport(surah)
         }
+
+        // FIX : LinearLayoutManager manquant → RecyclerView affichait 0 item
+        binding.rvBrowser.layoutManager = LinearLayoutManager(requireContext())
         binding.rvBrowser.adapter = browserAdapter
         browserAdapter.submitList(allSurahs)
         binding.tvResultCount.text = "${allSurahs.size} sourates"
     }
 
     private fun confirmImport(surah: SurahInfo) {
-        // Vérifie si elle est déjà importée
         val alreadyExists = vm.isSurahAlreadyImported(surah.number, selectedReciter.id)
+
         if (alreadyExists) {
             MaterialAlertDialogBuilder(requireContext())
                 .setTitle("Déjà importée")
@@ -140,8 +149,6 @@ class SurahBrowserFragment : Fragment() {
         binding.tvImportStatus.visibility = View.VISIBLE
         binding.tvImportStatus.text = "⏳ Importation de ${surah.nameLatin}…"
 
-        // FIX BUILD : importSurahFromLibrary(surah, reciter) { result -> ... }
-        // Le lambda reçoit un Long, type maintenant explicite dans SurahViewModel
         vm.importSurahFromLibrary(surah, selectedReciter) { result: Long ->
             if (_binding == null) return@importSurahFromLibrary
             binding.progressImport.visibility = View.GONE
@@ -155,7 +162,11 @@ class SurahBrowserFragment : Fragment() {
                 }
                 else -> {
                     binding.tvImportStatus.text = "❌ Erreur. Vérifiez votre connexion."
-                    Toast.makeText(requireContext(), "Erreur d'importation", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        requireContext(),
+                        "Erreur d'importation",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
         }
@@ -163,8 +174,6 @@ class SurahBrowserFragment : Fragment() {
 
     private fun openPlayer(sourateId: Long) {
         val fragment = PlayerFragment.newInstance(sourateId)
-        // FIX BUILD : loadFragment(fragment) → loadFragment(fragment, tag)
-        // MainActivity.loadFragment() exige maintenant un tag (fix navigation crash)
         (activity as? MainActivity)?.apply {
             loadFragment(fragment, PlayerFragment::class.java.simpleName)
             navigateTo(R.id.nav_player)
