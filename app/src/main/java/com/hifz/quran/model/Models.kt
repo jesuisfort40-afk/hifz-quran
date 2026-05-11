@@ -3,47 +3,39 @@ package com.hifz.quran.model
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  SOURATE
-//  Phase 1 : ajout de sourateNumber + reciterId pour lier à la bibliothèque
-// ─────────────────────────────────────────────────────────────────────────────
 @Entity(tableName = "sourates")
 data class Sourate(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val arabicName: String = "",
-    val filePath: String,           // URI local OU "" si mode streaming
+    val filePath: String,
     val totalVersets: Int = 0,
     val dateAdded: Long = System.currentTimeMillis(),
     val coverColor: String = "#1e3a5f",
-
-    // ── Nouveaux champs Phase 1 ──
-    val sourateNumber: Int = 0,     // 1–114 (0 = ajout manuel legacy)
-    val reciterId: String = ""      // ex: "Alafasy_128kbps"  (vide = fichier local)
+    val sourateNumber: Int = 0,
+    val reciterId: String = ""
 ) {
-    /** true si cette sourate vient de la bibliothèque intégrée */
     val isFromLibrary: Boolean get() = sourateNumber > 0 && reciterId.isNotEmpty()
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  VERSET
-//  Phase 1 : ajout du texte arabe + translittération
-// ─────────────────────────────────────────────────────────────────────────────
 @Entity(tableName = "versets")
 data class Verset(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val sourateId: Long,
-    val numero: Int,                // numéro du verset (1-based)
-    val startMs: Long = 0L,         // position dans le fichier local (legacy)
+    val numero: Int,
+    val startMs: Long = 0L,
     val endMs: Long = 0L,
     val status: VersetStatus = VersetStatus.A_APPRENDRE,
     val repeatCount: Int = 0,
     val lastPracticed: Long = 0,
-
-    // ── Nouveaux champs Phase 1 ──
-    val arabicText: String = "",    // texte arabe du verset
+    val arabicText: String = "",
     val transliteration: String = "",
-    val translationFr: String = ""
+    val translationFr: String = "",
+
+    // BUG FIX #1 — OFFLINE :
+    // Chemin absolu vers le fichier MP3 téléchargé localement.
+    // Vide ("") si pas encore téléchargé → fallback streaming.
+    val localAudioPath: String = ""
 )
 
 enum class VersetStatus {
@@ -52,7 +44,6 @@ enum class VersetStatus {
     MAITRISE
 }
 
-// Session + Reminder + PlayerState inchangés
 @Entity(tableName = "sessions")
 data class Session(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
