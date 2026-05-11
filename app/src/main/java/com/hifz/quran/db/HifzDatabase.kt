@@ -12,13 +12,13 @@ import com.hifz.quran.model.Verset
 
 @Database(
     entities = [Sourate::class, Verset::class, Session::class],
-    version = 2,          // ← incrémenté pour Phase 1
+    version = 3,          // ← incrémenté pour Phase 2 (offline audio)
     exportSchema = false
 )
 abstract class HifzDatabase : RoomDatabase() {
 
     abstract fun sourateDao(): SourateDao
-    abstract fun versetDao(): VersetDao
+    abstract fun versetDao():  VersetDao
     abstract fun sessionDao(): SessionDao
 
     companion object {
@@ -26,18 +26,23 @@ abstract class HifzDatabase : RoomDatabase() {
         private var INSTANCE: HifzDatabase? = null
 
         // ── Migration v1 → v2 ─────────────────────────────────────────────────
-        // Ajout de : sourateNumber, reciterId dans sourates
-        //            arabicText, transliteration, translationFr dans versets
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                // Nouvelles colonnes sur sourates
                 database.execSQL("ALTER TABLE sourates ADD COLUMN sourateNumber INTEGER NOT NULL DEFAULT 0")
                 database.execSQL("ALTER TABLE sourates ADD COLUMN reciterId TEXT NOT NULL DEFAULT ''")
-
-                // Nouvelles colonnes sur versets
                 database.execSQL("ALTER TABLE versets ADD COLUMN arabicText TEXT NOT NULL DEFAULT ''")
                 database.execSQL("ALTER TABLE versets ADD COLUMN transliteration TEXT NOT NULL DEFAULT ''")
                 database.execSQL("ALTER TABLE versets ADD COLUMN translationFr TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        // ── Migration v2 → v3 ─────────────────────────────────────────────────
+        // Ajout de localAudioPath dans versets pour la lecture offline
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE versets ADD COLUMN localAudioPath TEXT NOT NULL DEFAULT ''"
+                )
             }
         }
 
@@ -48,7 +53,7 @@ abstract class HifzDatabase : RoomDatabase() {
                     HifzDatabase::class.java,
                     "hifz_database"
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                     .also { INSTANCE = it }
             }
