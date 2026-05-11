@@ -81,6 +81,10 @@ interface SessionDao {
     @Query("SELECT COUNT(*) FROM sessions WHERE date >= :since")
     suspend fun sessionCountSince(since: Long): Int
 
+    // BUG FIX #3 — Streak : requête plage de temps pour calculer les jours consécutifs
+    @Query("SELECT COUNT(*) FROM sessions WHERE date >= :from AND date < :to")
+    suspend fun sessionCountInRange(from: Long, to: Long): Int
+
     @Query("SELECT SUM(repeatsDone) FROM sessions WHERE sourateId = :sourateId")
     suspend fun totalRepeatsBySourate(sourateId: Long): Int?
 
