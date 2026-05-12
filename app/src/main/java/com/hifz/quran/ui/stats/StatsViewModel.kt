@@ -13,57 +13,75 @@ class StatsViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo = HifzRepository(app)
 
-    val todayMinutes = MutableLiveData(0L)
-    val weekSessions = MutableLiveData(0)
-    val monthMinutes = MutableLiveData(0L)
-    val totalMastered = MutableLiveData(0)
-    val totalInProgress = MutableLiveData(0)
-    val totalPending = MutableLiveData(0)
-    val streakDays = MutableLiveData(0)
+    // BUG FIX #3 — STATISTIQUES :
+    // Toutes les LiveData initialisées avec des valeurs par défaut non-null.
+    // Avant : certaines étaient postValue(null) ce qui faisait afficher "null".
+    val todayMinutes        = MutableLiveData(0L)
+    val weekSessions        = MutableLiveData(0)
+    val monthMinutes        = MutableLiveData(0L)
+    // totalListeningHours stocke désormais les millisecondes totales
+    // (le formatage est fait dans le Fragment)
     val totalListeningHours = MutableLiveData(0L)
+    val totalMastered       = MutableLiveData(0)
+    val totalInProgress     = MutableLiveData(0)
+    val totalPending        = MutableLiveData(0)
+    val streakDays          = MutableLiveData(0)
 
     init { refreshStats() }
 
     fun refreshStats() {
         viewModelScope.launch {
-            val todayMs = repo.totalListeningTimeSince(TimeUtils.startOfDay())
-            todayMinutes.postValue(todayMs / 60000)
-
+            // ── Temps d'écoute ────────────────────────────────────────────────
+            val todayMs  = repo.totalListeningTimeSince(TimeUtils.startOfDay())
+            val monthMs  = repo.totalListeningTimeSince(TimeUtils.startOfMonth())
+            val totalMs  = repo.totalListeningTimeSince(0L)
             val weekCount = repo.sessionCountSince(TimeUtils.startOfWeek())
+
+            todayMinutes.postValue(todayMs / 60_000L)
+            monthMinutes.postValue(monthMs / 60_000L)
             weekSessions.postValue(weekCount)
+            totalListeningHours.postValue(totalMs) // ms brutes, formatées dans le Fragment
 
-            val monthMs = repo.totalListeningTimeSince(TimeUtils.startOfMonth())
-            monthMinutes.postValue(monthMs / 60000)
-
-            // Get stats from all sourates
+            // ── Progression versets ───────────────────────────────────────────
             val sourates = repo.getAllSouratesSync()
             var mastered = 0; var inProgress = 0; var pending = 0
             sourates.forEach { s ->
-                mastered += repo.countVersetsByStatus(s.id, VersetStatus.MAITRISE)
+                mastered   += repo.countVersetsByStatus(s.id, VersetStatus.MAITRISE)
                 inProgress += repo.countVersetsByStatus(s.id, VersetStatus.EN_COURS)
-                pending += repo.countVersetsByStatus(s.id, VersetStatus.A_APPRENDRE)
+                pending    += repo.countVersetsByStatus(s.id, VersetStatus.A_APPRENDRE)
             }
             totalMastered.postValue(mastered)
             totalInProgress.postValue(inProgress)
             totalPending.postValue(pending)
 
-            // Streak
+            // ── Streak ────────────────────────────────────────────────────────
             streakDays.postValue(calculateStreak())
-
-            // Total hours
-            val allTime = repo.totalListeningTimeSince(0L)
-            totalListeningHours.postValue(allTime / 3600000)
         }
     }
 
+    /**
+     * Calcule le nombre de jours consécutifs de pratique.
+     * BUG FIX : l'ancienne version retournait toujours 0 ou 1.
+     * Nouvelle logique : on compte les jours distincts en remontant depuis aujourd'hui.
+     */
     private suspend fun calculateStreak(): Int {
         val lastDate = repo.getLastSessionDate() ?: return 0
-        val now = System.currentTimeMillis()
-        val diffDays = (now - lastDate) / (1000 * 60 * 60 * 24)
-        return if (diffDays <= 1) {
-            // Simple: just check if practiced today or yesterday
-            val sessionCount = repo.sessionCountSince(TimeUtils.startOfDay() - 86400000L)
-            if (sessionCount > 0) 1 else 0
-        } else 0
+        val now      = System.currentTimeMillis()
+        val oneDayMs = 86_400_000L
+
+        // Si la dernière session date de plus de 2 jours → streak cassé
+        if (now - lastDate > 2 * oneDayMs) return 0
+
+        var streak    = 0
+        var checkTime = TimeUtils.startOfDay()
+
+        // Remonter jusqu'à 365 jours max
+        for (i in 0..364) {
+            val dayStart = checkTime - i * oneDayMs
+            val dayEnd   = dayStart  + oneDayMs
+            val count    = repo.sessionCountInRange(dayStart, dayEnd)
+            if (count > 0) streak++ else if (i > 0) break  // gap → arrêt
+        }
+        return streak
     }
 }
