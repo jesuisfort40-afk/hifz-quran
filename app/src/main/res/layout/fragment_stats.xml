@@ -12,7 +12,7 @@
         android:orientation="vertical"
         android:padding="20dp">
 
-        <!-- ── En-tête ── -->
+        <!-- En-tête -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -39,7 +39,7 @@
                 app:strokeColor="@color/border" />
         </LinearLayout>
 
-        <!-- ── Tableau : Temps d'écoute ── -->
+        <!-- Section : Temps d'écoute -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -63,102 +63,172 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
-                <!-- Ligne header tableau -->
+                <!-- Header tableau -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
-                    android:paddingHorizontal="16dp"
-                    android:paddingVertical="10dp"
+                    android:paddingLeft="16dp"
+                    android:paddingRight="16dp"
+                    android:paddingTop="10dp"
+                    android:paddingBottom="10dp"
                     android:background="@color/bg">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="Période"
-                        android:textColor="@color/muted" android:textSize="12sp" android:textStyle="bold" />
-                    <TextView android:layout_width="80dp" android:layout_height="wrap_content"
-                        android:gravity="end" android:text="Durée"
-                        android:textColor="@color/muted" android:textSize="12sp" android:textStyle="bold" />
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Période"
+                        android:textColor="@color/muted"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:layout_width="80dp"
+                        android:layout_height="wrap_content"
+                        android:gravity="end"
+                        android:text="Durée"
+                        android:textColor="@color/muted"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
 
-                <!-- Divider -->
-                <View android:layout_width="match_parent" android:layout_height="1dp"
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
                     android:background="@color/border" />
 
-                <!-- Ligne Aujourd'hui -->
+                <!-- Aujourd'hui -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
-                    android:paddingHorizontal="16dp"
-                    android:paddingVertical="14dp">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="Aujourd'hui"
-                        android:textColor="@color/text" android:textSize="14sp" />
-                    <TextView android:id="@+id/tvTodayTime"
-                        android:layout_width="80dp" android:layout_height="wrap_content"
-                        android:gravity="end" android:text="0min"
-                        android:textColor="@color/accent" android:textSize="14sp" android:textStyle="bold" />
+                    android:paddingLeft="16dp"
+                    android:paddingRight="16dp"
+                    android:paddingTop="14dp"
+                    android:paddingBottom="14dp">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Aujourd'hui"
+                        android:textColor="@color/text"
+                        android:textSize="14sp" />
+                    <TextView
+                        android:id="@+id/tvTodayTime"
+                        android:layout_width="80dp"
+                        android:layout_height="wrap_content"
+                        android:gravity="end"
+                        android:text="0min"
+                        android:textColor="@color/accent"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
 
-                <View android:layout_width="match_parent" android:layout_height="1dp"
-                    android:background="@color/border" android:marginHorizontal="16dp" />
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginLeft="16dp"
+                    android:layout_marginRight="16dp"
+                    android:background="@color/border" />
 
-                <!-- Ligne Ce mois -->
+                <!-- Ce mois -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
-                    android:paddingHorizontal="16dp"
-                    android:paddingVertical="14dp">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="Ce mois"
-                        android:textColor="@color/text" android:textSize="14sp" />
-                    <TextView android:id="@+id/tvMonthTime"
-                        android:layout_width="80dp" android:layout_height="wrap_content"
-                        android:gravity="end" android:text="0min"
-                        android:textColor="@color/accent" android:textSize="14sp" android:textStyle="bold" />
+                    android:paddingLeft="16dp"
+                    android:paddingRight="16dp"
+                    android:paddingTop="14dp"
+                    android:paddingBottom="14dp">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Ce mois"
+                        android:textColor="@color/text"
+                        android:textSize="14sp" />
+                    <TextView
+                        android:id="@+id/tvMonthTime"
+                        android:layout_width="80dp"
+                        android:layout_height="wrap_content"
+                        android:gravity="end"
+                        android:text="0min"
+                        android:textColor="@color/accent"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
 
-                <View android:layout_width="match_parent" android:layout_height="1dp"
-                    android:background="@color/border" android:marginHorizontal="16dp" />
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginLeft="16dp"
+                    android:layout_marginRight="16dp"
+                    android:background="@color/border" />
 
-                <!-- Ligne Total -->
+                <!-- Total cumulé -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
-                    android:paddingHorizontal="16dp"
-                    android:paddingVertical="14dp">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="Total cumulé"
-                        android:textColor="@color/text" android:textSize="14sp" />
-                    <TextView android:id="@+id/tvTotalHours"
-                        android:layout_width="80dp" android:layout_height="wrap_content"
-                        android:gravity="end" android:text="0min"
-                        android:textColor="@color/accent" android:textSize="14sp" android:textStyle="bold" />
+                    android:paddingLeft="16dp"
+                    android:paddingRight="16dp"
+                    android:paddingTop="14dp"
+                    android:paddingBottom="14dp">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Total cumulé"
+                        android:textColor="@color/text"
+                        android:textSize="14sp" />
+                    <TextView
+                        android:id="@+id/tvTotalHours"
+                        android:layout_width="80dp"
+                        android:layout_height="wrap_content"
+                        android:gravity="end"
+                        android:text="0min"
+                        android:textColor="@color/accent"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
 
-                <View android:layout_width="match_parent" android:layout_height="1dp"
-                    android:background="@color/border" android:marginHorizontal="16dp" />
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginLeft="16dp"
+                    android:layout_marginRight="16dp"
+                    android:background="@color/border" />
 
-                <!-- Ligne Sessions / semaine -->
+                <!-- Sessions semaine -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
-                    android:paddingHorizontal="16dp"
-                    android:paddingVertical="14dp">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="Sessions cette semaine"
-                        android:textColor="@color/text" android:textSize="14sp" />
-                    <TextView android:id="@+id/tvWeekSessions"
-                        android:layout_width="80dp" android:layout_height="wrap_content"
-                        android:gravity="end" android:text="0"
-                        android:textColor="@color/accent2" android:textSize="14sp" android:textStyle="bold" />
+                    android:paddingLeft="16dp"
+                    android:paddingRight="16dp"
+                    android:paddingTop="14dp"
+                    android:paddingBottom="14dp">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Sessions cette semaine"
+                        android:textColor="@color/text"
+                        android:textSize="14sp" />
+                    <TextView
+                        android:id="@+id/tvWeekSessions"
+                        android:layout_width="80dp"
+                        android:layout_height="wrap_content"
+                        android:gravity="end"
+                        android:text="0"
+                        android:textColor="@color/accent2"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
+
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- ── Tableau : Progression versets ── -->
+        <!-- Section : Progression versets -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -182,71 +252,145 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
-                <!-- Header -->
+                <!-- Header tableau -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
-                    android:paddingHorizontal="16dp"
-                    android:paddingVertical="10dp"
+                    android:paddingLeft="16dp"
+                    android:paddingRight="16dp"
+                    android:paddingTop="10dp"
+                    android:paddingBottom="10dp"
                     android:background="@color/bg">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="Statut"
-                        android:textColor="@color/muted" android:textSize="12sp" android:textStyle="bold" />
-                    <TextView android:layout_width="60dp" android:layout_height="wrap_content"
-                        android:gravity="end" android:text="Versets"
-                        android:textColor="@color/muted" android:textSize="12sp" android:textStyle="bold" />
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Statut"
+                        android:textColor="@color/muted"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:layout_width="60dp"
+                        android:layout_height="wrap_content"
+                        android:gravity="end"
+                        android:text="Versets"
+                        android:textColor="@color/muted"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
 
-                <View android:layout_width="match_parent" android:layout_height="1dp"
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
                     android:background="@color/border" />
 
                 <!-- Maîtrisés -->
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:paddingHorizontal="16dp" android:paddingVertical="14dp">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="Maîtrisés"
-                        android:textColor="@color/text" android:textSize="14sp" />
-                    <TextView android:id="@+id/tvMastered"
-                        android:layout_width="60dp" android:layout_height="wrap_content"
-                        android:gravity="end" android:text="0"
-                        android:textColor="@color/accent3" android:textSize="14sp" android:textStyle="bold" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingLeft="16dp"
+                    android:paddingRight="16dp"
+                    android:paddingTop="14dp"
+                    android:paddingBottom="14dp">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Maîtrisés"
+                        android:textColor="@color/text"
+                        android:textSize="14sp" />
+                    <TextView
+                        android:id="@+id/tvMastered"
+                        android:layout_width="60dp"
+                        android:layout_height="wrap_content"
+                        android:gravity="end"
+                        android:text="0"
+                        android:textColor="@color/accent3"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
 
-                <View android:layout_width="match_parent" android:layout_height="1dp"
-                    android:background="@color/border" android:marginHorizontal="16dp" />
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginLeft="16dp"
+                    android:layout_marginRight="16dp"
+                    android:background="@color/border" />
 
                 <!-- En cours -->
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:paddingHorizontal="16dp" android:paddingVertical="14dp">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="En cours"
-                        android:textColor="@color/text" android:textSize="14sp" />
-                    <TextView android:id="@+id/tvInProgress"
-                        android:layout_width="60dp" android:layout_height="wrap_content"
-                        android:gravity="end" android:text="0"
-                        android:textColor="@color/warn" android:textSize="14sp" android:textStyle="bold" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingLeft="16dp"
+                    android:paddingRight="16dp"
+                    android:paddingTop="14dp"
+                    android:paddingBottom="14dp">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="En cours"
+                        android:textColor="@color/text"
+                        android:textSize="14sp" />
+                    <TextView
+                        android:id="@+id/tvInProgress"
+                        android:layout_width="60dp"
+                        android:layout_height="wrap_content"
+                        android:gravity="end"
+                        android:text="0"
+                        android:textColor="@color/warn"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
 
-                <View android:layout_width="match_parent" android:layout_height="1dp"
-                    android:background="@color/border" android:marginHorizontal="16dp" />
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginLeft="16dp"
+                    android:layout_marginRight="16dp"
+                    android:background="@color/border" />
 
                 <!-- À apprendre -->
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:paddingHorizontal="16dp" android:paddingVertical="14dp">
-                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="À apprendre"
-                        android:textColor="@color/text" android:textSize="14sp" />
-                    <TextView android:id="@+id/tvPending"
-                        android:layout_width="60dp" android:layout_height="wrap_content"
-                        android:gravity="end" android:text="0"
-                        android:textColor="@color/muted" android:textSize="14sp" android:textStyle="bold" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingLeft="16dp"
+                    android:paddingRight="16dp"
+                    android:paddingTop="14dp"
+                    android:paddingBottom="14dp">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="À apprendre"
+                        android:textColor="@color/text"
+                        android:textSize="14sp" />
+                    <TextView
+                        android:id="@+id/tvPending"
+                        android:layout_width="60dp"
+                        android:layout_height="wrap_content"
+                        android:gravity="end"
+                        android:text="0"
+                        android:textColor="@color/muted"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
 
                 <!-- Barre de progression -->
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:gravity="center_vertical"
-                    android:paddingHorizontal="16dp" android:paddingBottom="16dp" android:paddingTop="4dp">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingLeft="16dp"
+                    android:paddingRight="16dp"
+                    android:paddingBottom="16dp"
+                    android:paddingTop="4dp">
+
                     <ProgressBar
                         android:id="@+id/progressMastered"
                         style="?android:attr/progressBarStyleHorizontal"
@@ -257,11 +401,12 @@
                         android:progress="0"
                         android:progressTint="@color/accent3"
                         android:progressBackgroundTint="@color/border" />
+
                     <TextView
                         android:id="@+id/tvProgressPct"
                         android:layout_width="40dp"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="10dp"
+                        android:layout_marginLeft="10dp"
                         android:gravity="end"
                         android:text="0%"
                         android:textColor="@color/accent3"
@@ -269,10 +414,11 @@
                         android:textStyle="bold"
                         android:visibility="gone" />
                 </LinearLayout>
+
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- ── Série de révision (streak) ── -->
+        <!-- Section : Régularité -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -296,20 +442,24 @@
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:paddingHorizontal="16dp"
-                android:paddingVertical="20dp">
+                android:paddingLeft="16dp"
+                android:paddingRight="16dp"
+                android:paddingTop="20dp"
+                android:paddingBottom="20dp">
 
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:orientation="vertical">
+
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Série de révision"
                         android:textColor="@color/text"
                         android:textSize="14sp" />
+
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -327,6 +477,7 @@
                     android:textColor="@color/warn"
                     android:textSize="28sp"
                     android:textStyle="bold" />
+
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
