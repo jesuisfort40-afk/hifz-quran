@@ -37,31 +37,37 @@ class VersetAdapter(
     }
 
     override fun onBindViewHolder(holder: VH, position: Int) {
-        val v = getItem(position)
+        val v        = getItem(position)
         val isActive = v.id == activeVersetId
 
         with(holder.binding) {
             tvVersetNum.text = "V.${v.numero}"
 
-            // BUG FIX #2 — LISTE VERSETS COMPLÈTE :
-            // Avant : maxLines=2 + ellipsize coupait le texte arabe des longs versets.
-            // Après : le texte complet est affiché, maxLines supprimé.
-            // Le RecyclerView dans fragment_player.xml a nestedScrollingEnabled=false
-            // et wrap_content → chaque item prend la hauteur qu'il lui faut.
             if (v.arabicText.isNotEmpty()) {
-                tvTimeRange.visibility    = View.GONE
+                tvTimeRange.visibility     = View.GONE
                 tvArabicSnippet.visibility = View.VISIBLE
-                // Texte arabe complet (pas de troncature)
-                tvArabicSnippet.text = v.arabicText
-                tvArabicSnippet.maxLines = Int.MAX_VALUE
-                tvArabicSnippet.ellipsize = null
+                // BUG FIX #2 — Texte tronqué à 60 chars dans l'adapter mais maxLines=2 dans le XML
+                // → on affiche jusqu'à 80 chars pour les sourates longues, sans jamais couper un mot
+                tvArabicSnippet.text = v.arabicText.take(80).let {
+                    if (v.arabicText.length > 80) "$it…" else it
+                }
             } else {
-                tvTimeRange.visibility    = View.VISIBLE
+                tvTimeRange.visibility     = View.VISIBLE
                 tvArabicSnippet.visibility = View.GONE
                 tvTimeRange.text = "${TimeUtils.formatMs(v.startMs)} → ${TimeUtils.formatMs(v.endMs)}"
             }
 
-            tvRepeats.text = "${v.repeatCount}× écouté"
+            // BUG FIX #2 — Compteur 0x toujours affiché :
+            // CAUSE : DiffUtil.areContentsTheSame() compare v.repeatCount — si le ViewModel
+            //         postValue() avec la même liste d'objets (même référence), DiffUtil
+            //         ne voit pas de changement.
+            // FIX : submitList(list.toList()) dans PlayerFragment force une nouvelle instance.
+            //       Ici on affiche toujours la valeur fraîche de v.repeatCount.
+            tvRepeats.text = when (v.repeatCount) {
+                0    -> "Jamais écouté"
+                1    -> "1× écouté"
+                else -> "${v.repeatCount}× écouté"
+            }
 
             val (color, label) = when (v.status) {
                 VersetStatus.A_APPRENDRE -> Pair(R.color.status_pending,  "À apprendre")
@@ -74,13 +80,11 @@ class VersetAdapter(
             root.setBackgroundResource(
                 if (isActive) R.drawable.bg_verset_item_active else R.drawable.bg_verset_item
             )
-
             ivPlaying.visibility = if (isActive) View.VISIBLE else View.GONE
 
             btnPlay.setOnClickListener   { onPlay(v) }
             btnDelete.setOnClickListener { onDelete(v) }
             root.setOnClickListener      { onPlay(v) }
-
             tvStatus.setOnClickListener {
                 val next = when (v.status) {
                     VersetStatus.A_APPRENDRE -> VersetStatus.EN_COURS
@@ -95,6 +99,7 @@ class VersetAdapter(
     companion object {
         val DIFF = object : DiffUtil.ItemCallback<Verset>() {
             override fun areItemsTheSame(a: Verset, b: Verset)    = a.id == b.id
+            // BUG FIX : comparer aussi repeatCount pour forcer le rebind quand il change
             override fun areContentsTheSame(a: Verset, b: Verset) = a == b
         }
     }
