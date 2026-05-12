@@ -14,12 +14,11 @@ import com.hifz.quran.model.VersetStatus
 import com.hifz.quran.util.TimeUtils
 
 class VersetAdapter(
-    private val onPlay: (Verset) -> Unit,
+    private val onPlay:         (Verset) -> Unit,
     private val onStatusChange: (Verset, VersetStatus) -> Unit,
-    private val onDelete: (Verset) -> Unit
+    private val onDelete:       (Verset) -> Unit
 ) : ListAdapter<Verset, VersetAdapter.VH>(DIFF) {
 
-    // ID du verset actuellement en lecture
     private var activeVersetId: Long = -1L
 
     fun setActiveVerset(id: Long) {
@@ -40,31 +39,30 @@ class VersetAdapter(
     override fun onBindViewHolder(holder: VH, position: Int) {
         val v = getItem(position)
         val isActive = v.id == activeVersetId
-        with(holder.binding) {
 
-            // ── Numéro ────────────────────────────────────────────────────────
+        with(holder.binding) {
             tvVersetNum.text = "V.${v.numero}"
 
-            // ── Temps ou texte arabe ──────────────────────────────────────────
+            // BUG FIX #2 — LISTE VERSETS COMPLÈTE :
+            // Avant : maxLines=2 + ellipsize coupait le texte arabe des longs versets.
+            // Après : le texte complet est affiché, maxLines supprimé.
+            // Le RecyclerView dans fragment_player.xml a nestedScrollingEnabled=false
+            // et wrap_content → chaque item prend la hauteur qu'il lui faut.
             if (v.arabicText.isNotEmpty()) {
-                // Mode bibliothèque : afficher le texte arabe
-                tvTimeRange.visibility = View.GONE
+                tvTimeRange.visibility    = View.GONE
                 tvArabicSnippet.visibility = View.VISIBLE
-                // Afficher les 60 premiers caractères comme aperçu dans la liste
-                tvArabicSnippet.text = if (v.arabicText.length > 60)
-                    v.arabicText.take(60) + "…"
-                else
-                    v.arabicText
+                // Texte arabe complet (pas de troncature)
+                tvArabicSnippet.text = v.arabicText
+                tvArabicSnippet.maxLines = Int.MAX_VALUE
+                tvArabicSnippet.ellipsize = null
             } else {
-                // Mode legacy : afficher les temps
-                tvTimeRange.visibility = View.VISIBLE
+                tvTimeRange.visibility    = View.VISIBLE
                 tvArabicSnippet.visibility = View.GONE
                 tvTimeRange.text = "${TimeUtils.formatMs(v.startMs)} → ${TimeUtils.formatMs(v.endMs)}"
             }
 
             tvRepeats.text = "${v.repeatCount}× écouté"
 
-            // ── Statut ────────────────────────────────────────────────────────
             val (color, label) = when (v.status) {
                 VersetStatus.A_APPRENDRE -> Pair(R.color.status_pending,  "À apprendre")
                 VersetStatus.EN_COURS    -> Pair(R.color.status_progress, "En cours")
@@ -73,22 +71,16 @@ class VersetAdapter(
             tvStatus.text = label
             tvStatus.setTextColor(ContextCompat.getColor(root.context, color))
 
-            // ── Surbrillance verset actif ────────────────────────────────────
             root.setBackgroundResource(
                 if (isActive) R.drawable.bg_verset_item_active else R.drawable.bg_verset_item
             )
-            tvVersetNum.setTextColor(
-                ContextCompat.getColor(root.context,
-                    if (isActive) R.color.accent else R.color.accent)
-            )
 
-            // ── Icône lecture animée ──────────────────────────────────────────
             ivPlaying.visibility = if (isActive) View.VISIBLE else View.GONE
 
-            // ── Listeners ────────────────────────────────────────────────────
-            btnPlay.setOnClickListener { onPlay(v) }
+            btnPlay.setOnClickListener   { onPlay(v) }
             btnDelete.setOnClickListener { onDelete(v) }
-            root.setOnClickListener { onPlay(v) }
+            root.setOnClickListener      { onPlay(v) }
+
             tvStatus.setOnClickListener {
                 val next = when (v.status) {
                     VersetStatus.A_APPRENDRE -> VersetStatus.EN_COURS
@@ -102,7 +94,7 @@ class VersetAdapter(
 
     companion object {
         val DIFF = object : DiffUtil.ItemCallback<Verset>() {
-            override fun areItemsTheSame(a: Verset, b: Verset) = a.id == b.id
+            override fun areItemsTheSame(a: Verset, b: Verset)    = a.id == b.id
             override fun areContentsTheSame(a: Verset, b: Verset) = a == b
         }
     }
