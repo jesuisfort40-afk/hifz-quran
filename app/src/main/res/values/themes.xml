@@ -14,7 +14,7 @@
     </style>
 
     <style name="Theme.HifzQuran.Splash" parent="Theme.HifzQuran">
-        <item name="android:windowBackground">@drawable/splash</item>
+        <item name="android:windowBackground">@color/bg</item>
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowNoTitle">true</item>
     </style>

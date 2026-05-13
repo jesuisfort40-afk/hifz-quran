@@ -12,12 +12,11 @@ class SplashActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Pas de setContentView — le fond vient du theme windowBackground (splash.png)
+        setContentView(R.layout.activity_splash)
 
-        // Lancer MainActivity après 1.5 secondes
         Handler(Looper.getMainLooper()).postDelayed({
             startActivity(Intent(this, MainActivity::class.java))
             finish()
-        }, 1500)
+        }, 2000)
     }
 }
