@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Halo doré radial derrière le logo -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+
+    <gradient
+        android:type="radial"
+        android:gradientRadius="110dp"
+        android:startColor="#80C8A200"
+        android:centerColor="#40C8A200"
+        android:endColor="#00C8A200" />
+
+</shape>
