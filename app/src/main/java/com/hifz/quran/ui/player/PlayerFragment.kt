@@ -10,6 +10,7 @@ import android.os.IBinder
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.NumberPicker
 import android.widget.SeekBar
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
@@ -29,44 +30,52 @@ class PlayerFragment : Fragment() {
     private val binding get() = _binding!!
     private lateinit var vm: PlayerViewModel
     private var playerService: AudioPlayerService? = null
-    private var isBound = false
+    private var isBound                 = false
     private var serviceObserverAttached = false
     private lateinit var versetAdapter: VersetAdapter
 
     private var isSeeking     = false
     private var isSegmentMode = false
 
-    // BUG FIX #1 — App se ferme à l'ouverture du lecteur après import :
-    // CAUSE : startForegroundService() était appelé depuis onViewCreated(),
-    //         puis loadSourate() était appelé immédiatement depuis
-    //         observeViewModel() AVANT que le bind soit établi.
-    //         Résultat : playerService = null → NPE → crash.
-    //         De plus, loadSourate() appelait filePath.isBlank() mais pour les
-    //         sourates bibliothèque filePath EST vide (audio local dans Verset) → return.
-    //
-    // FIX : on différencie isFromLibrary vs local. Et on ne lance loadSourateIntoService()
-    //       QUE depuis onServiceConnected() ou depuis l'observer versets (quand isBound=true).
+    // ─────────────────────────────────────────────────────────────────────────
+    // FIX #1 — Lecteur s'affiche uniquement si opérationnel
+    // On montre un état "chargement" jusqu'à ce que le service soit bindé
+    // et que la sourate soit prête.
+    // ─────────────────────────────────────────────────────────────────────────
+    private var isPlayerReady = false
+        set(value) {
+            field = value
+            if (_binding == null) return
+            binding.layoutPlayerReady.visibility  = if (value) View.VISIBLE else View.GONE
+            binding.layoutPlayerLoading.visibility = if (value) View.GONE  else View.VISIBLE
+        }
+
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             val binder = service as AudioPlayerService.PlayerBinder
             playerService = binder.getService()
             isBound = true
+
+            // FIX STATS AUTO : câbler le callback d'incrémentation
+            playerService?.onVersetPlayed = { versetId ->
+                vm.incrementRepeat(versetId)
+            }
+
             if (!serviceObserverAttached) {
                 observePlayerState()
                 serviceObserverAttached = true
             }
-            // Ne charger que si pas déjà en lecture
             val sourate = vm.currentSourate.value ?: return
-            val svc     = playerService ?: return
+            val svc = playerService ?: return
             if (!svc.isPlaying()) {
-                val versets = vm.versets.value ?: emptyList()
-                loadSourateIntoService(sourate, versets)
+                loadSourateIntoService(sourate, vm.versets.value ?: emptyList())
             }
         }
         override fun onServiceDisconnected(name: ComponentName?) {
             isBound = false
             playerService = null
             serviceObserverAttached = false
+            isPlayerReady = false
         }
     }
 
@@ -77,9 +86,7 @@ class PlayerFragment : Fragment() {
         }
     }
 
-    override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
-    ): View {
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentPlayerBinding.inflate(inflater, container, false)
         return binding.root
     }
@@ -88,6 +95,8 @@ class PlayerFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         vm = ViewModelProvider(requireActivity())[PlayerViewModel::class.java]
 
+        isPlayerReady = false // Afficher loading au démarrage
+
         val sourateId = arguments?.getLong(ARG_SOURATE_ID, -1L) ?: -1L
         if (sourateId != -1L) vm.loadSourate(sourateId)
 
@@ -95,12 +104,9 @@ class PlayerFragment : Fragment() {
         setupControls()
         observeViewModel()
 
-        // Démarrer le service puis binder
         val intent = Intent(requireContext(), AudioPlayerService::class.java)
         requireContext().startForegroundService(intent)
         requireContext().bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
-
-        // Démarrer la session pour les stats
         vm.startSession()
     }
 
@@ -110,10 +116,9 @@ class PlayerFragment : Fragment() {
             onStatusChange = { verset, status -> vm.updateStatus(verset.id, status) },
             onDelete       = { verset -> confirmDeleteVerset(verset) }
         )
-        // BUG FIX #2 — Liste qui se bloque au scroll :
-        // nestedScrollingEnabled doit être false sur le RecyclerView imbriqué dans ScrollView
         binding.rvVersets.layoutManager = LinearLayoutManager(requireContext())
         binding.rvVersets.adapter = versetAdapter
+        // FIX SCROLL : désactiver le scroll imbriqué pour que ScrollView parent gère tout
         binding.rvVersets.isNestedScrollingEnabled = false
     }
 
@@ -122,26 +127,19 @@ class PlayerFragment : Fragment() {
 
         binding.btnPrevVerset.setOnClickListener {
             val svc = playerService ?: return@setOnClickListener
-            if (svc.isStreamingMode()) {
-                val idx = svc.getCurrentStreamingVersetIndex()
-                if (idx > 0) svc.seekToVerset(idx - 1)
-            }
+            if (svc.isStreamingMode()) svc.seekToVerset(svc.getCurrentStreamingVersetIndex() - 1)
         }
         binding.btnNextVerset.setOnClickListener {
-            val svc   = playerService ?: return@setOnClickListener
-            if (svc.isStreamingMode()) {
-                val idx   = svc.getCurrentStreamingVersetIndex()
-                val total = vm.versets.value?.size ?: 0
-                if (idx < total - 1) svc.seekToVerset(idx + 1)
-            }
+            val svc = playerService ?: return@setOnClickListener
+            if (svc.isStreamingMode()) svc.seekToVerset(svc.getCurrentStreamingVersetIndex() + 1)
         }
 
         binding.seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
-                if (fromUser) binding.tvCurrentTime.text = TimeUtils.formatMs(progress.toLong())
+            override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
+                if (fromUser) binding.tvCurrentTime.text = TimeUtils.formatMs(p.toLong())
             }
-            override fun onStartTrackingTouch(sb: SeekBar)  { isSeeking = true }
-            override fun onStopTrackingTouch(sb: SeekBar)   { isSeeking = false; playerService?.seekTo(sb.progress.toLong()) }
+            override fun onStartTrackingTouch(sb: SeekBar) { isSeeking = true }
+            override fun onStopTrackingTouch(sb: SeekBar) { isSeeking = false; playerService?.seekTo(sb.progress.toLong()) }
         })
 
         binding.seekSegmentStart.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -149,7 +147,7 @@ class PlayerFragment : Fragment() {
                 if (fromUser) { vm.setSegmentStart(p.toLong()); binding.tvSegmentStart.text = TimeUtils.formatMs(p.toLong()) }
             }
             override fun onStartTrackingTouch(sb: SeekBar) {}
-            override fun onStopTrackingTouch(sb: SeekBar)  { applySegment() }
+            override fun onStopTrackingTouch(sb: SeekBar) { applySegment() }
         })
 
         binding.seekSegmentEnd.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -157,7 +155,7 @@ class PlayerFragment : Fragment() {
                 if (fromUser) { vm.setSegmentEnd(p.toLong()); binding.tvSegmentEnd.text = TimeUtils.formatMs(p.toLong()) }
             }
             override fun onStartTrackingTouch(sb: SeekBar) {}
-            override fun onStopTrackingTouch(sb: SeekBar)  { applySegment() }
+            override fun onStopTrackingTouch(sb: SeekBar) { applySegment() }
         })
 
         binding.btnSegmentMode.setOnClickListener {
@@ -166,9 +164,13 @@ class PlayerFragment : Fragment() {
             binding.btnSegmentMode.isSelected = isSegmentMode
         }
 
-        binding.btnLoop.setOnClickListener      { vm.toggleLoop() }
+        // FIX : Switch boucle au lieu de bouton toggle
+        binding.switchLoop.setOnCheckedChangeListener { _, checked ->
+            vm.setLoopEnabled(checked)
+        }
+
         binding.btnLoopMinus.setOnClickListener { vm.setLoopCount(maxOf(0, (vm.loopCount.value ?: 3) - 1)) }
-        binding.btnLoopPlus.setOnClickListener  { vm.setLoopCount(minOf(20, (vm.loopCount.value ?: 3) + 1)) }
+        binding.btnLoopPlus.setOnClickListener  { vm.setLoopCount(minOf(99, (vm.loopCount.value ?: 3) + 1)) }
         binding.btnSpeed.setOnClickListener     { showSpeedPicker() }
 
         binding.btnMarkStart.setOnClickListener {
@@ -182,8 +184,16 @@ class PlayerFragment : Fragment() {
             binding.tvSegmentEnd.text = TimeUtils.formatMs(pos); applySegment()
         }
 
+        // Sélection plage de versets
+        binding.btnSelectRange.setOnClickListener { showRangePicker() }
+        binding.btnClearRange.setOnClickListener  {
+            playerService?.clearVersetRange()
+            binding.tvRangeInfo.visibility = View.GONE
+            binding.btnClearRange.visibility = View.GONE
+        }
+
         binding.btnSaveVerset.setOnClickListener { showSaveVersetDialog() }
-        binding.btnAddVerset.setOnClickListener {
+        binding.btnAddVerset.setOnClickListener  {
             isSegmentMode = true
             binding.layoutSegment.visibility = View.VISIBLE
             binding.btnSegmentMode.isSelected = true
@@ -195,46 +205,46 @@ class PlayerFragment : Fragment() {
             if (sourate != null) {
                 binding.tvSourateName.text   = sourate.name
                 binding.tvSourateArabic.text = sourate.arabicName.ifEmpty { "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ" }
-
                 if (sourate.isFromLibrary) {
                     binding.seekBar.visibility       = View.INVISIBLE
                     binding.btnPrevVerset.visibility = View.VISIBLE
                     binding.btnNextVerset.visibility = View.VISIBLE
                     binding.cardSegment.visibility   = View.GONE
+                    binding.btnSelectRange.visibility = View.VISIBLE
                 } else {
                     binding.seekBar.visibility       = View.VISIBLE
                     binding.btnPrevVerset.visibility = View.GONE
                     binding.btnNextVerset.visibility = View.GONE
                     binding.cardSegment.visibility   = View.VISIBLE
+                    binding.btnSelectRange.visibility = View.GONE
                 }
-                // Ne pas appeler loadSourateIntoService ici :
-                // les versets ne sont peut-être pas encore chargés → on attend l'observer versets
             } else {
                 binding.tvSourateName.text   = "Aucune sourate sélectionnée"
                 binding.tvSourateArabic.text = "Ajoutez une sourate depuis la bibliothèque"
             }
         }
 
-        // BUG FIX #2 — Liste qui se perd au retour sur le lecteur :
-        // CAUSE : submitList() avec la même liste ne déclenchait pas de rafraîchissement
-        //         car DiffUtil considérait les contenus identiques.
-        // FIX : on appelle submitList() à chaque émission — Room garantit les updates.
         vm.versets.observe(viewLifecycleOwner) { list ->
-            versetAdapter.submitList(list.toList()) // toList() force une nouvelle instance
+            // FIX SCROLL : toList() force DiffUtil à détecter les changements
+            versetAdapter.submitList(list.toList())
             binding.tvNoVersets.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
 
-            // BUG FIX #1 — Charger le streaming ICI (versets disponibles + service peut être prêt)
+            // Charger le streaming quand les versets sont prêts
             val sourate = vm.currentSourate.value ?: return@observe
             if (sourate.isFromLibrary && list.isNotEmpty() && isBound) {
                 val svc = playerService ?: return@observe
                 if (!svc.isStreamingReady() || !svc.isPlaying()) {
                     loadSourateIntoService(sourate, list)
                 }
+                // FIX #1 : marquer le lecteur comme prêt quand les versets arrivent
+                isPlayerReady = true
+            } else if (!sourate.isFromLibrary) {
+                isPlayerReady = isBound
             }
         }
 
         vm.loopEnabled.observe(viewLifecycleOwner) { enabled ->
-            binding.btnLoop.isSelected = enabled
+            binding.switchLoop.isChecked = enabled
             playerService?.setLoop(enabled, vm.loopCount.value ?: 3)
         }
 
@@ -265,7 +275,6 @@ class PlayerFragment : Fragment() {
             binding.btnPlayPause.setImageResource(if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play)
             binding.tvSpeed.text = "${"%.2f".format(state.speed)}x"
 
-            // Surbrillance verset actif
             state.versetId?.let { versetAdapter.setActiveVerset(it) }
 
             // Indicateur boucle
@@ -277,7 +286,7 @@ class PlayerFragment : Fragment() {
                 binding.tvLoopProgress.visibility = View.GONE
             }
 
-            // Carte texte arabe (mode streaming)
+            // Carte texte arabe
             val svc = playerService
             if (svc != null && svc.isStreamingMode()) {
                 val idx    = svc.getCurrentStreamingVersetIndex()
@@ -285,17 +294,20 @@ class PlayerFragment : Fragment() {
                 val verset  = versets.getOrNull(idx)
                 binding.tvVersetNumBadge.text = "Verset ${idx + 1} / ${versets.size}"
                 binding.cardArabicText.visibility = View.VISIBLE
-                if (verset != null && verset.arabicText.isNotEmpty()) {
+                if (verset?.arabicText?.isNotEmpty() == true) {
                     binding.tvVersetArabic.text = verset.arabicText
                     binding.tvVersetArabic.visibility = View.VISIBLE
-                } else {
-                    binding.tvVersetArabic.visibility = View.GONE
-                }
-                if (verset != null && verset.transliteration.isNotEmpty()) {
+                } else binding.tvVersetArabic.visibility = View.GONE
+                if (verset?.transliteration?.isNotEmpty() == true) {
                     binding.tvVersetTranslit.text = verset.transliteration
                     binding.tvVersetTranslit.visibility = View.VISIBLE
-                } else {
-                    binding.tvVersetTranslit.visibility = View.GONE
+                } else binding.tvVersetTranslit.visibility = View.GONE
+
+                // Afficher info plage active
+                if (state.rangeStart >= 0) {
+                    binding.tvRangeInfo.text = "Plage: V.${state.rangeStart + 1} → V.${state.rangeEnd + 1}"
+                    binding.tvRangeInfo.visibility   = View.VISIBLE
+                    binding.btnClearRange.visibility = View.VISIBLE
                 }
             } else {
                 binding.cardArabicText.visibility = View.GONE
@@ -303,6 +315,7 @@ class PlayerFragment : Fragment() {
         }
     }
 
+    // FIX SWITCH SOURATE : loadSourateIntoService détecte le changement
     private fun loadSourateIntoService(sourate: Sourate, versets: List<Verset>) {
         val svc = playerService ?: return
         if (sourate.isFromLibrary) {
@@ -313,12 +326,15 @@ class PlayerFragment : Fragment() {
                 sourateNumber = sourate.sourateNumber,
                 reciterId     = sourate.reciterId
             )
+            isPlayerReady = true
         } else {
             if (sourate.filePath.isBlank()) return
             svc.loadAudio(Uri.parse(sourate.filePath), sourate.id)
+            isPlayerReady = true
         }
     }
 
+    // FIX BUG VERSET : seekToVerset charge directement le bon verset
     private fun playVerset(verset: Verset) {
         val sourate = vm.currentSourate.value ?: return
         val svc     = playerService           ?: return
@@ -327,8 +343,12 @@ class PlayerFragment : Fragment() {
             val versets = vm.versets.value ?: return
             val index   = versets.indexOfFirst { it.id == verset.id }
             if (index >= 0) {
+                // Effacer la plage active pour ne jouer que ce verset
+                svc.clearVersetRange()
                 svc.seekToVerset(index)
                 svc.setLoop(vm.loopEnabled.value ?: false, vm.loopCount.value ?: 3)
+                binding.tvRangeInfo.visibility   = View.GONE
+                binding.btnClearRange.visibility = View.GONE
             }
         } else {
             if (sourate.filePath.isBlank()) return
@@ -336,10 +356,53 @@ class PlayerFragment : Fragment() {
             svc.setVersetId(verset.id)
             svc.setLoop(vm.loopEnabled.value ?: false, vm.loopCount.value ?: 3)
             svc.play()
+            vm.incrementRepeat(verset.id)
         }
-        // BUG FIX #2 — compteur 0x : incrementRepeat met à jour repeatCount en base
-        // Room émet la liste → versetAdapter.submitList() → "3× écouté" s'affiche
-        vm.incrementRepeat(verset.id)
+    }
+
+    // FIX NOUVELLE FONCTIONNALITÉ : sélectionner une plage de versets à boucler
+    private fun showRangePicker() {
+        val versets = vm.versets.value ?: return
+        if (versets.size < 2) return
+
+        val labels = versets.map { "V.${it.numero}" }.toTypedArray()
+
+        val layout = android.widget.LinearLayout(requireContext()).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER
+            setPadding(32, 24, 32, 24)
+        }
+
+        val npStart = NumberPicker(requireContext()).apply {
+            minValue = 0; maxValue = versets.size - 1; displayedValues = labels; value = 0
+        }
+        val npEnd = NumberPicker(requireContext()).apply {
+            minValue = 0; maxValue = versets.size - 1; displayedValues = labels; value = versets.size - 1
+        }
+
+        val tvTo = android.widget.TextView(requireContext()).apply {
+            text = "  →  "; textSize = 16f
+            setTextColor(resources.getColor(R.color.text, null))
+        }
+
+        layout.addView(npStart)
+        layout.addView(tvTo)
+        layout.addView(npEnd)
+
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Sélectionner une plage de versets")
+            .setMessage("Répéter en boucle les versets sélectionnés")
+            .setView(layout)
+            .setPositiveButton("Appliquer") { _, _ ->
+                val start = npStart.value
+                val end   = maxOf(npEnd.value, start)
+                playerService?.setVersetRange(start, end)
+                binding.tvRangeInfo.text     = "Plage: V.${start + 1} → V.${end + 1}"
+                binding.tvRangeInfo.visibility   = View.VISIBLE
+                binding.btnClearRange.visibility = View.VISIBLE
+            }
+            .setNegativeButton("Annuler", null)
+            .show()
     }
 
     private fun applySegment() {
@@ -382,16 +445,10 @@ class PlayerFragment : Fragment() {
     }
 
     override fun onDestroyView() {
-        // Enregistrer la session avant de quitter
         val sourate = vm.currentSourate.value
-        if (sourate != null) {
-            vm.endSession(
-                sourateId   = sourate.id,
-                versetId    = playerService?.let { if (it.isStreamingMode()) null else null },
-                repeatsDone = 0
-            )
-        }
+        if (sourate != null) vm.endSession(sourate.id, null, 0)
         if (isBound) {
+            playerService?.onVersetPlayed = null
             requireContext().unbindService(serviceConnection)
             isBound = false
             playerService = null
