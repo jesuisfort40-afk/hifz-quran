@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
+import androidx.recyclerview.widget.LinearLayoutManager
 import com.hifz.quran.MainActivity
 import com.hifz.quran.R
 import com.hifz.quran.databinding.FragmentHomeBinding
@@ -17,6 +18,7 @@ class HomeFragment : Fragment() {
     private var _binding: FragmentHomeBinding? = null
     private val binding get() = _binding!!
     private lateinit var statsVm: StatsViewModel
+    private lateinit var badgeAdapter: BadgePreviewAdapter
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
@@ -29,6 +31,7 @@ class HomeFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         statsVm = ViewModelProvider(requireActivity())[StatsViewModel::class.java]
 
+        setupBadges()
         setGreeting()
         observeStats()
 
@@ -42,45 +45,49 @@ class HomeFragment : Fragment() {
             (activity as? MainActivity)?.navigateTo(R.id.nav_stats)
         }
 
-        // Actualiser les stats à chaque visite de l'accueil
         statsVm.refreshStats()
+    }
+
+    private fun setupBadges() {
+        badgeAdapter = BadgePreviewAdapter()
+        binding.rvBadges.layoutManager =
+            LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
+        binding.rvBadges.adapter = badgeAdapter
+        binding.rvBadges.isNestedScrollingEnabled = false
+
+        statsVm.unlockedBadges.observe(viewLifecycleOwner) { badges ->
+            val recent = badges.take(5)
+            badgeAdapter.submitList(recent)
+            binding.tvNoBadges.visibility = if (badges.isEmpty()) View.VISIBLE else View.GONE
+            binding.rvBadges.visibility   = if (badges.isEmpty()) View.GONE   else View.VISIBLE
+        }
     }
 
     private fun setGreeting() {
         val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        // BUG FIX #3 — Pas de stickers dans le greeting
-        binding.tvGreeting.text = when (hour) {
-            in 5..11  -> "صباح الخير\nBonne révision du matin"
-            in 12..17 -> "بعد الظهر\nContinuez votre hifz"
-            in 18..21 -> "مساء الخير\nBonne révision du soir"
-            else      -> "الليل\nQue Allah facilite votre mémorisation"
+        val (arabic, french) = when (hour) {
+            in 5..11  -> "صباح الخير" to "Bonne révision du matin"
+            in 12..17 -> "بعد الظهر"  to "Continuez votre hifz"
+            in 18..21 -> "مساء الخير" to "Bonne révision du soir"
+            else      -> "الليل"      to "Que Allah facilite votre mémorisation"
         }
+        binding.tvGreeting.text    = arabic
+        binding.tvSubGreeting.text = french
     }
 
     private fun observeStats() {
-        // BUG FIX #3 — Stats qui ne comptent pas :
-        // CAUSE : StatsViewModel.refreshStats() n'était pas appelé depuis HomeFragment,
-        //         donc les LiveData restaient à leur valeur initiale (0).
-        //         refreshStats() est maintenant appelé dans onViewCreated().
-
         statsVm.todayMinutes.observe(viewLifecycleOwner) { mins ->
             val v = mins ?: 0L
-            binding.tvTodayTime.text = when {
-                v >= 60 -> "${v / 60}h ${v % 60}min"
-                else    -> "${v}min"
-            }
+            binding.tvTodayTime.text = if (v >= 60) "${v / 60}h ${v % 60}min" else "${v}min"
         }
-
         statsVm.weekSessions.observe(viewLifecycleOwner) { count ->
             val v = count ?: 0
             binding.tvWeekSessions.text = "$v session${if (v > 1) "s" else ""}"
         }
-
         statsVm.totalMastered.observe(viewLifecycleOwner) { count ->
             val v = count ?: 0
             binding.tvMastered.text = "$v verset${if (v > 1) "s" else ""}"
         }
-
         statsVm.streakDays.observe(viewLifecycleOwner) { days ->
             val v = days ?: 0
             binding.tvStreak.text = "$v jour${if (v > 1) "s" else ""}"
