@@ -12,6 +12,35 @@
         android:orientation="vertical"
         android:padding="16dp">
 
+        <!-- ── Écran chargement (FIX : lecteur pas encore prêt) ── -->
+        <LinearLayout
+            android:id="@+id/layoutPlayerLoading"
+            android:layout_width="match_parent"
+            android:layout_height="120dp"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:visibility="gone">
+            <ProgressBar
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:indeterminateTint="@color/accent" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Chargement..."
+                android:textColor="@color/muted"
+                android:textSize="13sp"
+                android:layout_marginTop="8dp" />
+        </LinearLayout>
+
+        <!-- ── Contenu player (visible quand prêt) ── -->
+        <LinearLayout
+            android:id="@+id/layoutPlayerReady"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="visible">
+
         <!-- ── En-tête sourate ── -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
@@ -19,13 +48,11 @@
             android:layout_marginBottom="12dp"
             app:cardBackgroundColor="@color/surface"
             app:cardCornerRadius="16dp">
-
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:padding="20dp">
-
                 <TextView
                     android:id="@+id/tvSourateArabic"
                     android:layout_width="match_parent"
@@ -36,7 +63,6 @@
                     android:textSize="18sp"
                     android:fontFamily="serif"
                     android:layout_marginBottom="4dp" />
-
                 <TextView
                     android:id="@+id/tvSourateName"
                     android:layout_width="match_parent"
@@ -48,7 +74,7 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- ── Carte texte arabe du verset actif (mode bibliothèque) ── -->
+        <!-- ── Carte texte arabe du verset actif ── -->
         <androidx.cardview.widget.CardView
             android:id="@+id/cardArabicText"
             android:layout_width="match_parent"
@@ -57,14 +83,11 @@
             app:cardBackgroundColor="@color/surface"
             app:cardCornerRadius="16dp"
             android:visibility="gone">
-
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:padding="20dp">
-
-                <!-- Badge numéro verset -->
                 <TextView
                     android:id="@+id/tvVersetNumBadge"
                     android:layout_width="wrap_content"
@@ -75,10 +98,10 @@
                     android:textStyle="bold"
                     android:layout_marginBottom="10dp"
                     android:background="@drawable/bg_control_btn"
-                    android:paddingHorizontal="10dp"
-                    android:paddingVertical="4dp" />
-
-                <!-- Texte arabe -->
+                    android:paddingLeft="10dp"
+                    android:paddingRight="10dp"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp" />
                 <TextView
                     android:id="@+id/tvVersetArabic"
                     android:layout_width="match_parent"
@@ -91,8 +114,6 @@
                     android:lineSpacingMultiplier="1.6"
                     android:layout_marginBottom="12dp"
                     android:visibility="gone" />
-
-                <!-- Translittération -->
                 <TextView
                     android:id="@+id/tvVersetTranslit"
                     android:layout_width="match_parent"
@@ -113,14 +134,12 @@
             android:layout_marginBottom="12dp"
             app:cardBackgroundColor="@color/surface"
             app:cardCornerRadius="16dp">
-
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:padding="16dp">
 
-                <!-- SeekBar globale -->
                 <SeekBar
                     android:id="@+id/seekBar"
                     android:layout_width="match_parent"
@@ -128,7 +147,6 @@
                     android:progressTint="@color/accent"
                     android:thumbTint="@color/accent" />
 
-                <!-- Temps -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -142,48 +160,38 @@
                         android:text="0:00" android:textColor="@color/muted" android:textSize="12sp" />
                 </LinearLayout>
 
-                <!-- Contrôles : Prev | Play | Next -->
+                <!-- Prev | Play | Next -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
                     android:gravity="center"
                     android:orientation="horizontal">
-
-                    <!-- Bouton Précédent (bibliothèque uniquement) -->
                     <ImageButton
                         android:id="@+id/btnPrevVerset"
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
+                        android:layout_width="48dp" android:layout_height="48dp"
                         android:layout_marginEnd="16dp"
                         android:background="@drawable/bg_control_btn"
                         android:src="@drawable/ic_skip_previous"
                         app:tint="@color/text"
                         android:visibility="gone" />
-
-                    <!-- Play / Pause -->
                     <ImageButton
                         android:id="@+id/btnPlayPause"
-                        android:layout_width="64dp"
-                        android:layout_height="64dp"
+                        android:layout_width="64dp" android:layout_height="64dp"
                         android:background="@drawable/bg_play_button"
                         android:src="@drawable/ic_play"
                         app:tint="@color/bg" />
-
-                    <!-- Bouton Suivant (bibliothèque uniquement) -->
                     <ImageButton
                         android:id="@+id/btnNextVerset"
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
+                        android:layout_width="48dp" android:layout_height="48dp"
                         android:layout_marginStart="16dp"
                         android:background="@drawable/bg_control_btn"
                         android:src="@drawable/ic_skip_next"
                         app:tint="@color/text"
                         android:visibility="gone" />
-
                 </LinearLayout>
 
-                <!-- Vitesse + boucle -->
+                <!-- Vitesse + Switch boucle -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -206,26 +214,33 @@
 
                     <View android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
 
+                    <!-- FIX : Switch On/Off pour la boucle -->
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchLoop"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="8dp"
+                        android:text="Boucle"
+                        android:textColor="@color/muted"
+                        android:textSize="12sp" />
+
+                    <!-- Bouton loop (gardé pour compatibilité) -->
                     <ImageButton
                         android:id="@+id/btnLoop"
-                        android:layout_width="36dp" android:layout_height="36dp"
-                        android:background="@drawable/bg_control_btn"
-                        android:src="@drawable/ic_loop" android:layout_marginEnd="8dp"
-                        app:tint="@color/muted" />
+                        android:layout_width="0dp" android:layout_height="0dp"
+                        android:visibility="gone" />
 
                     <ImageButton
                         android:id="@+id/btnLoopMinus"
                         android:layout_width="28dp" android:layout_height="28dp"
                         android:background="@drawable/bg_control_btn"
                         android:src="@drawable/ic_minus" app:tint="@color/text" />
-
                     <TextView
                         android:id="@+id/tvLoopCount"
                         android:layout_width="32dp" android:layout_height="wrap_content"
                         android:gravity="center" android:text="3"
                         android:textColor="@color/text" android:textSize="14sp"
                         android:textStyle="bold" />
-
                     <ImageButton
                         android:id="@+id/btnLoopPlus"
                         android:layout_width="28dp" android:layout_height="28dp"
@@ -241,6 +256,51 @@
                     android:text="1/3" android:textColor="@color/accent"
                     android:textSize="13sp" android:visibility="gone" />
 
+                <!-- FIX NOUVELLE FONCTIONNALITE : Sélection plage de versets -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center_vertical">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSelectRange"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="36dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:text="Plage versets"
+                        android:textSize="11sp"
+                        app:strokeColor="@color/accent2"
+                        android:textColor="@color/accent2"
+                        android:visibility="gone" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnClearRange"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:text="Effacer plage"
+                        android:textSize="11sp"
+                        app:strokeColor="@color/danger"
+                        android:textColor="@color/danger"
+                        android:visibility="gone" />
+                </LinearLayout>
+
+                <!-- Info plage active -->
+                <TextView
+                    android:id="@+id/tvRangeInfo"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:gravity="center"
+                    android:text="Plage: V.1 → V.5"
+                    android:textColor="@color/accent2"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
@@ -252,38 +312,32 @@
             android:layout_marginBottom="12dp"
             app:cardBackgroundColor="@color/surface"
             app:cardCornerRadius="16dp">
-
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:padding="16dp">
-
                 <LinearLayout
                     android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:gravity="center_vertical" android:orientation="horizontal">
-
                     <TextView
                         android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="✂ Sélection de segment"
+                        android:text="Sélection de segment"
                         android:textColor="@color/text"
                         android:textSize="15sp" android:textStyle="bold" />
-
                     <ImageButton
                         android:id="@+id/btnSegmentMode"
                         android:layout_width="36dp" android:layout_height="36dp"
                         android:background="@drawable/bg_control_btn"
                         android:src="@drawable/ic_cut" app:tint="@color/muted" />
                 </LinearLayout>
-
                 <LinearLayout
                     android:id="@+id/layoutSegment"
                     android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
                     android:orientation="vertical"
                     android:visibility="gone">
-
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical"
                         android:layout_marginBottom="8dp">
@@ -296,7 +350,6 @@
                             android:layout_height="wrap_content" android:text="0:00"
                             android:textColor="@color/accent3" android:textSize="11sp" android:gravity="end" />
                     </LinearLayout>
-
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical"
                         android:layout_marginBottom="12dp">
@@ -309,7 +362,6 @@
                             android:layout_height="wrap_content" android:text="0:00"
                             android:textColor="@color/danger" android:textSize="11sp" android:gravity="end" />
                     </LinearLayout>
-
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:layout_marginBottom="12dp">
                         <com.google.android.material.button.MaterialButton
@@ -317,7 +369,7 @@
                             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                             android:layout_width="0dp" android:layout_height="36dp"
                             android:layout_weight="1" android:layout_marginEnd="6dp"
-                            android:text="⬅ Marquer début"
+                            android:text="Marquer début"
                             android:textSize="11sp" app:strokeColor="@color/accent3"
                             android:textColor="@color/accent3" />
                         <com.google.android.material.button.MaterialButton
@@ -325,15 +377,14 @@
                             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                             android:layout_width="0dp" android:layout_height="36dp"
                             android:layout_weight="1" android:layout_marginStart="6dp"
-                            android:text="Marquer fin ➡"
+                            android:text="Marquer fin"
                             android:textSize="11sp" app:strokeColor="@color/danger"
                             android:textColor="@color/danger" />
                     </LinearLayout>
-
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnSaveVerset"
                         android:layout_width="match_parent" android:layout_height="44dp"
-                        android:text="💾 Sauvegarder comme verset"
+                        android:text="Sauvegarder comme verset"
                         app:backgroundTint="@color/accent2" app:cornerRadius="8dp" />
                 </LinearLayout>
             </LinearLayout>
@@ -345,38 +396,32 @@
             android:layout_height="wrap_content"
             app:cardBackgroundColor="@color/surface"
             app:cardCornerRadius="16dp">
-
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:padding="16dp">
-
                 <LinearLayout
                     android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="horizontal" android:gravity="center_vertical"
                     android:layout_marginBottom="12dp">
-
                     <TextView
                         android:layout_width="0dp" android:layout_height="wrap_content"
-                        android:layout_weight="1" android:text="📋 Versets"
+                        android:layout_weight="1" android:text="Versets"
                         android:textColor="@color/text" android:textSize="15sp"
                         android:textStyle="bold" />
-
                     <ImageButton
                         android:id="@+id/btnAddVerset"
                         android:layout_width="32dp" android:layout_height="32dp"
                         android:background="@drawable/bg_control_btn"
                         android:src="@drawable/ic_add" app:tint="@color/accent" />
                 </LinearLayout>
-
                 <TextView
                     android:id="@+id/tvNoVersets"
                     android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:gravity="center" android:padding="20dp"
-                    android:text="Appuyez ▶ sur un verset pour commencer"
+                    android:text="Appuyez sur un verset pour commencer"
                     android:textColor="@color/muted" android:textSize="14sp" />
-
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/rvVersets"
                     android:layout_width="match_parent"
@@ -384,6 +429,8 @@
                     android:nestedScrollingEnabled="false" />
             </LinearLayout>
         </androidx.cardview.widget.CardView>
+
+        </LinearLayout><!-- fin layoutPlayerReady -->
 
     </LinearLayout>
 </ScrollView>
