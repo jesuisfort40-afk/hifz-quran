@@ -31,18 +31,11 @@ data class Verset(
     val arabicText: String = "",
     val transliteration: String = "",
     val translationFr: String = "",
-
-    // BUG FIX #1 — OFFLINE :
-    // Chemin absolu vers le fichier MP3 téléchargé localement.
-    // Vide ("") si pas encore téléchargé → fallback streaming.
+    // FIX OFFLINE : chemin local du MP3 téléchargé
     val localAudioPath: String = ""
 )
 
-enum class VersetStatus {
-    A_APPRENDRE,
-    EN_COURS,
-    MAITRISE
-}
+enum class VersetStatus { A_APPRENDRE, EN_COURS, MAITRISE }
 
 @Entity(tableName = "sessions")
 data class Session(
@@ -52,6 +45,18 @@ data class Session(
     val durationMs: Long,
     val repeatsDone: Int,
     val date: Long = System.currentTimeMillis()
+)
+
+// ── Badges / Récompenses ──────────────────────────────────────────────────────
+@Entity(tableName = "badges")
+data class Badge(
+    @PrimaryKey val id: String,          // ex: "first_surah", "streak_7"
+    val titleFr: String,
+    val titleAr: String,
+    val description: String,
+    val iconRes: String,                 // nom de la ressource drawable
+    val unlockedAt: Long = 0L,          // 0 = pas encore débloqué
+    val isUnlocked: Boolean = false
 )
 
 data class Reminder(
@@ -74,5 +79,8 @@ data class PlayerState(
     val loopCurrent: Int = 0,
     val speed: Float = 1.0f,
     val segmentStart: Long = 0L,
-    val segmentEnd: Long = 0L
+    val segmentEnd: Long = 0L,
+    // Plage de versets sélectionnée pour la répétition en boucle
+    val rangeStart: Int = -1,   // index dans la liste (0-based), -1 = pas de plage
+    val rangeEnd: Int = -1
 )
