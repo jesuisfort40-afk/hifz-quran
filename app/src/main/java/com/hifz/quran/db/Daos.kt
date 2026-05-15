@@ -2,6 +2,7 @@ package com.hifz.quran.db
 
 import androidx.lifecycle.LiveData
 import androidx.room.*
+import com.hifz.quran.model.Badge
 import com.hifz.quran.model.Session
 import com.hifz.quran.model.Sourate
 import com.hifz.quran.model.Verset
@@ -26,9 +27,6 @@ interface SourateDao {
 
     @Delete
     suspend fun deleteSourate(sourate: Sourate)
-
-    @Query("DELETE FROM sourates WHERE id = :id")
-    suspend fun deleteSourateById(id: Long)
 }
 
 @Dao
@@ -65,6 +63,9 @@ interface VersetDao {
 
     @Query("SELECT COUNT(*) FROM versets WHERE sourateId = :sourateId AND status = :status")
     suspend fun countByStatus(sourateId: Long, status: VersetStatus): Int
+
+    @Query("SELECT SUM(repeatCount) FROM versets WHERE sourateId = :sourateId")
+    suspend fun totalRepeatsBySourate(sourateId: Long): Int?
 }
 
 @Dao
@@ -81,13 +82,36 @@ interface SessionDao {
     @Query("SELECT COUNT(*) FROM sessions WHERE date >= :since")
     suspend fun sessionCountSince(since: Long): Int
 
-    // BUG FIX #3 — Streak : requête plage de temps pour calculer les jours consécutifs
     @Query("SELECT COUNT(*) FROM sessions WHERE date >= :from AND date < :to")
     suspend fun sessionCountInRange(from: Long, to: Long): Int
 
-    @Query("SELECT SUM(repeatsDone) FROM sessions WHERE sourateId = :sourateId")
-    suspend fun totalRepeatsBySourate(sourateId: Long): Int?
-
     @Query("SELECT date FROM sessions ORDER BY date DESC LIMIT 1")
     suspend fun getLastSessionDate(): Long?
+
+    @Query("SELECT SUM(repeatsDone) FROM sessions")
+    suspend fun totalRepeatsDone(): Int?
+}
+
+@Dao
+interface BadgeDao {
+    @Query("SELECT * FROM badges ORDER BY unlockedAt DESC")
+    fun getAllBadges(): LiveData<List<Badge>>
+
+    @Query("SELECT * FROM badges WHERE isUnlocked = 1 ORDER BY unlockedAt DESC")
+    fun getUnlockedBadges(): LiveData<List<Badge>>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertBadge(badge: Badge)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertBadges(badges: List<Badge>)
+
+    @Query("UPDATE badges SET isUnlocked = 1, unlockedAt = :time WHERE id = :id AND isUnlocked = 0")
+    suspend fun unlockBadge(id: String, time: Long = System.currentTimeMillis())
+
+    @Query("SELECT COUNT(*) FROM badges WHERE isUnlocked = 1")
+    suspend fun countUnlocked(): Int
+
+    @Query("SELECT * FROM badges WHERE id = :id")
+    suspend fun getBadgeById(id: String): Badge?
 }
