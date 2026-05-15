@@ -5,7 +5,7 @@
     android:layout_height="match_parent"
     android:background="@color/bg">
 
-    <!-- Image splash en fond -->
+    <!-- Fond : image splash -->
     <ImageView
         android:id="@+id/ivSplash"
         android:layout_width="match_parent"
@@ -13,27 +13,25 @@
         android:src="@drawable/splash"
         android:scaleType="centerCrop" />
 
-    <!-- Halo doré derrière le logo (glow effect) -->
+    <!-- Halo doré derrière le logo -->
     <View
         android:id="@+id/viewGlow"
         android:layout_width="220dp"
         android:layout_height="220dp"
         android:layout_gravity="center"
-        android:layout_marginTop="-40dp"
         android:background="@drawable/bg_splash_glow"
         android:alpha="0" />
 
-    <!-- Logo de l'app -->
+    <!-- Logo centré -->
     <ImageView
         android:id="@+id/ivLogo"
         android:layout_width="130dp"
         android:layout_height="130dp"
         android:layout_gravity="center"
-        android:layout_marginTop="-40dp"
         android:src="@mipmap/ic_launcher"
         android:alpha="0" />
 
-    <!-- Texte développeur -->
+    <!-- SDSLABS en bas -->
     <TextView
         android:id="@+id/tvDeveloper"
         android:layout_width="match_parent"
