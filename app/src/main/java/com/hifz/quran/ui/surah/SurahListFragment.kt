@@ -11,17 +11,8 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.hifz.quran.R
 import com.hifz.quran.databinding.FragmentSurahListBinding
 import com.hifz.quran.model.Sourate
-import com.hifz.quran.ui.player.PlayerFragment
 import com.hifz.quran.MainActivity
 
-/**
- * Liste des sourates importées dans la bibliothèque personnelle.
- *
- * CHANGEMENT Phase 1 : l'import depuis un fichier local est supprimé.
- * Toutes les sourates sont désormais importées via SurahBrowserFragment
- * (bibliothèque de 114 sourates + streaming everyayah.com).
- * Le FAB redirige donc vers le navigateur de sourates.
- */
 class SurahListFragment : Fragment() {
 
     private var _binding: FragmentSurahListBinding? = null
@@ -52,7 +43,6 @@ class SurahListFragment : Fragment() {
             binding.tvEmpty.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
         }
 
-        // FAB → ouvre le navigateur de la bibliothèque (114 sourates)
         binding.fabAdd.setOnClickListener {
             (activity as? MainActivity)?.apply {
                 loadFragment(SurahBrowserFragment(), SurahBrowserFragment::class.java.simpleName)
@@ -69,12 +59,14 @@ class SurahListFragment : Fragment() {
             .show()
     }
 
+    /**
+     * FIX DOUBLE LECTURE : on passe par openPlayer() de MainActivity
+     * qui supprime l'ancienne instance du PlayerFragment AVANT d'en créer une nouvelle.
+     * Avant ce fix, deux instances de PlayerFragment coexistaient :
+     * l'ancien continuait à jouer pendant que le nouveau démarrait → double lecture.
+     */
     private fun openPlayer(sourate: Sourate) {
-        val fragment = PlayerFragment.newInstance(sourate.id)
-        (activity as? MainActivity)?.apply {
-            loadFragment(fragment, PlayerFragment::class.java.simpleName)
-            navigateTo(R.id.nav_player)
-        }
+        (activity as? MainActivity)?.openPlayer(sourate.id)
     }
 
     override fun onDestroyView() {
