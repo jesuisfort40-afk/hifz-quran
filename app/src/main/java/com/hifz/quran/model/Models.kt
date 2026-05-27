@@ -31,7 +31,6 @@ data class Verset(
     val arabicText: String = "",
     val transliteration: String = "",
     val translationFr: String = "",
-    // FIX OFFLINE : chemin local du MP3 téléchargé
     val localAudioPath: String = ""
 )
 
@@ -47,15 +46,14 @@ data class Session(
     val date: Long = System.currentTimeMillis()
 )
 
-// ── Badges / Récompenses ──────────────────────────────────────────────────────
 @Entity(tableName = "badges")
 data class Badge(
-    @PrimaryKey val id: String,          // ex: "first_surah", "streak_7"
+    @PrimaryKey val id: String,
     val titleFr: String,
     val titleAr: String,
     val description: String,
-    val iconRes: String,                 // nom de la ressource drawable
-    val unlockedAt: Long = 0L,          // 0 = pas encore débloqué
+    val iconRes: String,
+    val unlockedAt: Long = 0L,
     val isUnlocked: Boolean = false
 )
 
@@ -80,7 +78,9 @@ data class PlayerState(
     val speed: Float = 1.0f,
     val segmentStart: Long = 0L,
     val segmentEnd: Long = 0L,
-    // Plage de versets sélectionnée pour la répétition en boucle
-    val rangeStart: Int = -1,   // index dans la liste (0-based), -1 = pas de plage
-    val rangeEnd: Int = -1
+    val rangeStart: Int = -1,
+    val rangeEnd: Int = -1,
+    // FIX NOUVEAU : répétition de plage
+    val rangeLoopCount: Int = 1,    // nombre de fois à répéter la plage (0 = infini)
+    val rangeCurrentLoop: Int = 0   // compteur courant
 )
