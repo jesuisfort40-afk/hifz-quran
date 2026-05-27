@@ -27,7 +27,16 @@ class MainActivity : AppCompatActivity() {
             when (item.itemId) {
                 R.id.nav_home     -> loadFragment(HomeFragment(),      HomeFragment::class.java.simpleName)
                 R.id.nav_sourates -> loadFragment(SurahListFragment(), SurahListFragment::class.java.simpleName)
-                R.id.nav_player   -> loadFragment(PlayerFragment(),    PlayerFragment::class.java.simpleName)
+                R.id.nav_player -> {
+    val vm = ViewModelProvider(this)[PlayerViewModel::class.java]
+    if (vm.currentSourate.value != null) {
+        loadFragment(PlayerFragment(), PlayerFragment::class.java.simpleName)
+    } else {
+        // Pas de sourate chargée → aller à la bibliothèque
+        loadFragment(SurahListFragment(), SurahListFragment::class.java.simpleName)
+        binding.bottomNav.selectedItemId = R.id.nav_sourates
+    }
+}
                 R.id.nav_stats    -> loadFragment(StatsFragment(),     StatsFragment::class.java.simpleName)
                 R.id.nav_settings -> loadFragment(SettingsFragment(),  SettingsFragment::class.java.simpleName)
             }
