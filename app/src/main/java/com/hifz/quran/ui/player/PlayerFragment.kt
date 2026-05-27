@@ -37,16 +37,11 @@ class PlayerFragment : Fragment() {
     private var isSeeking     = false
     private var isSegmentMode = false
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // FIX #1 — Lecteur s'affiche uniquement si opérationnel
-    // On montre un état "chargement" jusqu'à ce que le service soit bindé
-    // et que la sourate soit prête.
-    // ─────────────────────────────────────────────────────────────────────────
     private var isPlayerReady = false
         set(value) {
             field = value
             if (_binding == null) return
-            binding.layoutPlayerReady.visibility  = if (value) View.VISIBLE else View.GONE
+            binding.layoutPlayerReady.visibility   = if (value) View.VISIBLE else View.GONE
             binding.layoutPlayerLoading.visibility = if (value) View.GONE  else View.VISIBLE
         }
 
@@ -56,7 +51,6 @@ class PlayerFragment : Fragment() {
             playerService = binder.getService()
             isBound = true
 
-            // FIX STATS AUTO : câbler le callback d'incrémentation
             playerService?.onVersetPlayed = { versetId ->
                 vm.incrementRepeat(versetId)
             }
@@ -95,7 +89,7 @@ class PlayerFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         vm = ViewModelProvider(requireActivity())[PlayerViewModel::class.java]
 
-        isPlayerReady = false // Afficher loading au démarrage
+        isPlayerReady = false
 
         val sourateId = arguments?.getLong(ARG_SOURATE_ID, -1L) ?: -1L
         if (sourateId != -1L) vm.loadSourate(sourateId)
@@ -111,14 +105,13 @@ class PlayerFragment : Fragment() {
     }
 
     private fun setupVersetList() {
+        // FIX : suppression du paramètre onDelete
         versetAdapter = VersetAdapter(
             onPlay         = { verset -> playVerset(verset) },
-            onStatusChange = { verset, status -> vm.updateStatus(verset.id, status) },
-            onDelete       = { verset -> confirmDeleteVerset(verset) }
+            onStatusChange = { verset, status -> vm.updateStatus(verset.id, status) }
         )
         binding.rvVersets.layoutManager = LinearLayoutManager(requireContext())
         binding.rvVersets.adapter = versetAdapter
-        // FIX SCROLL : désactiver le scroll imbriqué pour que ScrollView parent gère tout
         binding.rvVersets.isNestedScrollingEnabled = false
     }
 
@@ -164,7 +157,6 @@ class PlayerFragment : Fragment() {
             binding.btnSegmentMode.isSelected = isSegmentMode
         }
 
-        // FIX : Switch boucle au lieu de bouton toggle
         binding.switchLoop.setOnCheckedChangeListener { _, checked ->
             vm.setLoopEnabled(checked)
         }
@@ -184,11 +176,10 @@ class PlayerFragment : Fragment() {
             binding.tvSegmentEnd.text = TimeUtils.formatMs(pos); applySegment()
         }
 
-        // Sélection plage de versets
         binding.btnSelectRange.setOnClickListener { showRangePicker() }
         binding.btnClearRange.setOnClickListener  {
             playerService?.clearVersetRange()
-            binding.tvRangeInfo.visibility = View.GONE
+            binding.tvRangeInfo.visibility   = View.GONE
             binding.btnClearRange.visibility = View.GONE
         }
 
@@ -206,16 +197,16 @@ class PlayerFragment : Fragment() {
                 binding.tvSourateName.text   = sourate.name
                 binding.tvSourateArabic.text = sourate.arabicName.ifEmpty { "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ" }
                 if (sourate.isFromLibrary) {
-                    binding.seekBar.visibility       = View.INVISIBLE
-                    binding.btnPrevVerset.visibility = View.VISIBLE
-                    binding.btnNextVerset.visibility = View.VISIBLE
-                    binding.cardSegment.visibility   = View.GONE
+                    binding.seekBar.visibility        = View.INVISIBLE
+                    binding.btnPrevVerset.visibility  = View.VISIBLE
+                    binding.btnNextVerset.visibility  = View.VISIBLE
+                    binding.cardSegment.visibility    = View.GONE
                     binding.btnSelectRange.visibility = View.VISIBLE
                 } else {
-                    binding.seekBar.visibility       = View.VISIBLE
-                    binding.btnPrevVerset.visibility = View.GONE
-                    binding.btnNextVerset.visibility = View.GONE
-                    binding.cardSegment.visibility   = View.VISIBLE
+                    binding.seekBar.visibility        = View.VISIBLE
+                    binding.btnPrevVerset.visibility  = View.GONE
+                    binding.btnNextVerset.visibility  = View.GONE
+                    binding.cardSegment.visibility    = View.VISIBLE
                     binding.btnSelectRange.visibility = View.GONE
                 }
             } else {
@@ -225,18 +216,15 @@ class PlayerFragment : Fragment() {
         }
 
         vm.versets.observe(viewLifecycleOwner) { list ->
-            // FIX SCROLL : toList() force DiffUtil à détecter les changements
             versetAdapter.submitList(list.toList())
             binding.tvNoVersets.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
 
-            // Charger le streaming quand les versets sont prêts
             val sourate = vm.currentSourate.value ?: return@observe
             if (sourate.isFromLibrary && list.isNotEmpty() && isBound) {
                 val svc = playerService ?: return@observe
                 if (!svc.isStreamingReady() || !svc.isPlaying()) {
                     loadSourateIntoService(sourate, list)
                 }
-                // FIX #1 : marquer le lecteur comme prêt quand les versets arrivent
                 isPlayerReady = true
             } else if (!sourate.isFromLibrary) {
                 isPlayerReady = isBound
@@ -277,7 +265,6 @@ class PlayerFragment : Fragment() {
 
             state.versetId?.let { versetAdapter.setActiveVerset(it) }
 
-            // Indicateur boucle
             if (state.loopEnabled) {
                 val max = if (state.loopCount == 0) "∞" else "${state.loopCount}"
                 binding.tvLoopProgress.text = "${state.loopCurrent + 1}/$max"
@@ -286,26 +273,30 @@ class PlayerFragment : Fragment() {
                 binding.tvLoopProgress.visibility = View.GONE
             }
 
-            // Carte texte arabe
             val svc = playerService
             if (svc != null && svc.isStreamingMode()) {
-                val idx    = svc.getCurrentStreamingVersetIndex()
+                val idx     = svc.getCurrentStreamingVersetIndex()
                 val versets = vm.versets.value ?: emptyList()
                 val verset  = versets.getOrNull(idx)
-                binding.tvVersetNumBadge.text = "Verset ${idx + 1} / ${versets.size}"
+                binding.tvVersetNumBadge.text     = "Verset ${idx + 1} / ${versets.size}"
                 binding.cardArabicText.visibility = View.VISIBLE
                 if (verset?.arabicText?.isNotEmpty() == true) {
-                    binding.tvVersetArabic.text = verset.arabicText
+                    binding.tvVersetArabic.text      = verset.arabicText
                     binding.tvVersetArabic.visibility = View.VISIBLE
                 } else binding.tvVersetArabic.visibility = View.GONE
                 if (verset?.transliteration?.isNotEmpty() == true) {
-                    binding.tvVersetTranslit.text = verset.transliteration
+                    binding.tvVersetTranslit.text      = verset.transliteration
                     binding.tvVersetTranslit.visibility = View.VISIBLE
                 } else binding.tvVersetTranslit.visibility = View.GONE
 
-                // Afficher info plage active
+                // Afficher infos plage + compteur de répétition de plage
                 if (state.rangeStart >= 0) {
-                    binding.tvRangeInfo.text = "Plage: V.${state.rangeStart + 1} → V.${state.rangeEnd + 1}"
+                    val loopInfo = when {
+                        state.rangeLoopCount == 0 -> " · ∞"
+                        state.rangeLoopCount > 1  -> " · ${state.rangeCurrentLoop + 1}/${state.rangeLoopCount}"
+                        else                       -> ""
+                    }
+                    binding.tvRangeInfo.text     = "Plage: V.${state.rangeStart + 1} → V.${state.rangeEnd + 1}$loopInfo"
                     binding.tvRangeInfo.visibility   = View.VISIBLE
                     binding.btnClearRange.visibility = View.VISIBLE
                 }
@@ -315,7 +306,6 @@ class PlayerFragment : Fragment() {
         }
     }
 
-    // FIX SWITCH SOURATE : loadSourateIntoService détecte le changement
     private fun loadSourateIntoService(sourate: Sourate, versets: List<Verset>) {
         val svc = playerService ?: return
         if (sourate.isFromLibrary) {
@@ -334,7 +324,6 @@ class PlayerFragment : Fragment() {
         }
     }
 
-    // FIX BUG VERSET : seekToVerset charge directement le bon verset
     private fun playVerset(verset: Verset) {
         val sourate = vm.currentSourate.value ?: return
         val svc     = playerService           ?: return
@@ -343,7 +332,6 @@ class PlayerFragment : Fragment() {
             val versets = vm.versets.value ?: return
             val index   = versets.indexOfFirst { it.id == verset.id }
             if (index >= 0) {
-                // Effacer la plage active pour ne jouer que ce verset
                 svc.clearVersetRange()
                 svc.seekToVerset(index)
                 svc.setLoop(vm.loopEnabled.value ?: false, vm.loopCount.value ?: 3)
@@ -360,44 +348,82 @@ class PlayerFragment : Fragment() {
         }
     }
 
-    // FIX NOUVELLE FONCTIONNALITÉ : sélectionner une plage de versets à boucler
+    /**
+     * FIX NOUVEAU — Sélection de plage avec choix du nombre de répétitions.
+     * L'utilisateur choisit verset de début, verset de fin,
+     * et combien de fois répéter la plage (1 = une fois, 0 = infini).
+     */
     private fun showRangePicker() {
         val versets = vm.versets.value ?: return
         if (versets.size < 2) return
 
         val labels = versets.map { "V.${it.numero}" }.toTypedArray()
 
-        val layout = android.widget.LinearLayout(requireContext()).apply {
-            orientation = android.widget.LinearLayout.HORIZONTAL
-            gravity = android.view.Gravity.CENTER
-            setPadding(32, 24, 32, 24)
+        // Conteneur principal vertical
+        val mainLayout = android.widget.LinearLayout(requireContext()).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(32, 24, 32, 8)
         }
 
+        // Ligne 1 : sélection plage (début → fin)
+        val rangeRow = android.widget.LinearLayout(requireContext()).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity     = android.view.Gravity.CENTER
+        }
         val npStart = NumberPicker(requireContext()).apply {
             minValue = 0; maxValue = versets.size - 1; displayedValues = labels; value = 0
         }
         val npEnd = NumberPicker(requireContext()).apply {
             minValue = 0; maxValue = versets.size - 1; displayedValues = labels; value = versets.size - 1
         }
-
-        val tvTo = android.widget.TextView(requireContext()).apply {
+        val tvArrow = android.widget.TextView(requireContext()).apply {
             text = "  →  "; textSize = 16f
             setTextColor(resources.getColor(R.color.text, null))
         }
+        rangeRow.addView(npStart)
+        rangeRow.addView(tvArrow)
+        rangeRow.addView(npEnd)
 
-        layout.addView(npStart)
-        layout.addView(tvTo)
-        layout.addView(npEnd)
+        // Ligne 2 : label "Répétitions de la plage"
+        val tvRepeatLabel = android.widget.TextView(requireContext()).apply {
+            text      = "Répétitions de la plage"
+            textSize  = 13f
+            setTextColor(resources.getColor(R.color.muted, null))
+            setPadding(0, 24, 0, 4)
+        }
+
+        // Ligne 3 : sélecteur du nombre de répétitions
+        val repeatRow = android.widget.LinearLayout(requireContext()).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity     = android.view.Gravity.CENTER
+        }
+        // Labels : 1×, 2×, ... 10×, ∞ (0)
+        val repeatLabels = (1..10).map { "${it}×" }.toMutableList().apply { add("∞") }.toTypedArray()
+        val npRepeat = NumberPicker(requireContext()).apply {
+            minValue        = 0
+            maxValue        = repeatLabels.size - 1
+            displayedValues = repeatLabels
+            value           = 0   // défaut : 1×
+        }
+        repeatRow.addView(npRepeat)
+
+        mainLayout.addView(rangeRow)
+        mainLayout.addView(tvRepeatLabel)
+        mainLayout.addView(repeatRow)
 
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("Sélectionner une plage de versets")
-            .setMessage("Répéter en boucle les versets sélectionnés")
-            .setView(layout)
+            .setMessage("La plage sera répétée le nombre de fois choisi")
+            .setView(mainLayout)
             .setPositiveButton("Appliquer") { _, _ ->
-                val start = npStart.value
-                val end   = maxOf(npEnd.value, start)
-                playerService?.setVersetRange(start, end)
-                binding.tvRangeInfo.text     = "Plage: V.${start + 1} → V.${end + 1}"
+                val start      = npStart.value
+                val end        = maxOf(npEnd.value, start)
+                // 0-indexed dans repeatLabels → valeur réelle : index+1, sauf dernier = 0 (infini)
+                val loopCount  = if (npRepeat.value == repeatLabels.size - 1) 0 else npRepeat.value + 1
+                playerService?.setVersetRange(start, end, loopCount)
+
+                val loopLabel = if (loopCount == 0) "∞" else "${loopCount}×"
+                binding.tvRangeInfo.text     = "Plage: V.${start + 1} → V.${end + 1} · $loopLabel"
                 binding.tvRangeInfo.visibility   = View.VISIBLE
                 binding.btnClearRange.visibility = View.VISIBLE
             }
@@ -435,13 +461,6 @@ class PlayerFragment : Fragment() {
             .setPositiveButton("Sauvegarder") { _, _ -> vm.saveVerset(start, end) }
             .setNegativeButton("Annuler", null)
             .show()
-    }
-
-    private fun confirmDeleteVerset(verset: Verset) {
-        MaterialAlertDialogBuilder(requireContext())
-            .setTitle("Supprimer le verset ${verset.numero} ?")
-            .setPositiveButton("Supprimer") { _, _ -> vm.deleteVerset(verset) }
-            .setNegativeButton("Annuler", null).show()
     }
 
     override fun onDestroyView() {
