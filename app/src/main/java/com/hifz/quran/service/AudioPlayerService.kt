@@ -50,12 +50,16 @@ class AudioPlayerService : LifecycleService() {
     private var streamingVersetIndex   = 0
     private var streamingReady         = false
 
-    // ─── Plage de versets pour boucle multi-versets ───────────────────────────
-    // FIX : l'utilisateur peut sélectionner "verset 2 à 5" et boucler sur cette plage
-    private var rangeStart = -1   // index 0-based dans streamingVersets, -1 = pas de plage
-    private var rangeEnd   = -1
+    // ─── Plage de versets + répétition de plage ───────────────────────────────
+    // rangeStart/rangeEnd : index 0-based, -1 = pas de plage
+    // rangeLoopCount : nombre de fois à répéter la plage (0 = infini)
+    // rangeCurrentLoop : compteur courant de répétition de plage
+    private var rangeStart       = -1
+    private var rangeEnd         = -1
+    private var rangeLoopCount   = 1   // FIX NOUVEAU : répétition de plage
+    private var rangeCurrentLoop = 0
 
-    // ─── Callback stats (incrémentation auto) ────────────────────────────────
+    // ─── Callback stats ────────────────────────────────────────────────────────
     var onVersetPlayed: ((versetId: Long) -> Unit)? = null
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -117,17 +121,15 @@ class AudioPlayerService : LifecycleService() {
     // ─── Mode fichier local ───────────────────────────────────────────────────
     fun loadAudio(uri: Uri, sourateId: Long, startMs: Long = 0L, endMs: Long = 0L) {
         if (uri.toString().isBlank()) return
-        // FIX SWITCH SOURATE : arrêter proprement avant de charger une nouvelle sourate
-        if (currentSourateId != sourateId && currentSourateId != -1L) {
-            player.stop()
-        }
+        // FIX DOUBLE LECTURE : arrêt complet avant chargement d'une nouvelle source
+        player.stop()
+        player.clearMediaItems()
         streamingMode    = false
         streamingReady   = false
         currentLoop      = 0
         currentSourateId = sourateId
         segmentStart     = startMs
         segmentEnd       = endMs
-        player.stop()
         val mediaItem = if (endMs > startMs) {
             MediaItem.Builder().setUri(uri)
                 .setClippingConfiguration(
@@ -143,24 +145,26 @@ class AudioPlayerService : LifecycleService() {
 
     // ─── Mode streaming ───────────────────────────────────────────────────────
     fun loadStreaming(
-        versets:        List<Verset>,
-        sourateId:      Long,
-        sourateNumber:  Int,
-        reciterId:      String,
+        versets:          List<Verset>,
+        sourateId:        Long,
+        sourateNumber:    Int,
+        reciterId:        String,
         startVersetIndex: Int = 0
     ) {
         if (versets.isEmpty()) return
 
-        // FIX SWITCH SOURATE : si différente sourate → arrêter et réinitialiser
         val isSameSourate = streamingReady &&
                 streamingSourateNumber == sourateNumber &&
                 streamingReciterId == reciterId
 
+        // FIX DOUBLE LECTURE : si changement de sourate → arrêt complet + reset
         if (!isSameSourate) {
             player.stop()
-            currentLoop = 0
-            rangeStart  = -1
-            rangeEnd    = -1
+            player.clearMediaItems()
+            currentLoop        = 0
+            rangeStart         = -1
+            rangeEnd           = -1
+            rangeCurrentLoop   = 0
         }
 
         streamingMode          = true
@@ -170,10 +174,12 @@ class AudioPlayerService : LifecycleService() {
         streamingReciterId     = reciterId
         currentSourateId       = sourateId
 
+        // Si même sourate déjà en lecture → ne pas relancer
         if (isSameSourate && (player.isPlaying || player.playbackState == Player.STATE_READY)) return
 
         streamingVersetIndex = startVersetIndex.coerceIn(0, versets.size - 1)
-        currentLoop = 0
+        currentLoop          = 0
+        rangeCurrentLoop     = 0
         playStreamingVerset(streamingVersetIndex)
         startForeground(NOTIF_ID, buildNotification())
     }
@@ -192,7 +198,10 @@ class AudioPlayerService : LifecycleService() {
             MediaItem.fromUri(Uri.parse(url))
         }
 
+        // FIX FIABILITÉ LECTURE : clearMediaItems() avant chaque nouveau verset
+        // évite que ExoPlayer continue sur un item périmé
         player.stop()
+        player.clearMediaItems()
         player.setMediaItem(mediaItem)
         player.playWhenReady = true
         player.prepare()
@@ -201,42 +210,48 @@ class AudioPlayerService : LifecycleService() {
 
     // ─── Logique de fin de verset en streaming ────────────────────────────────
     private fun handleStreamingEnd() {
-        // FIX STATS AUTO : incrémenter le compteur même en lecture automatique
         currentVersetId?.let { id -> onVersetPlayed?.invoke(id) }
 
-        val effectiveEnd = if (rangeEnd >= 0) rangeEnd else streamingVersets.size - 1
+        val effectiveStart = if (rangeStart >= 0) rangeStart else 0
+        val effectiveEnd   = if (rangeEnd   >= 0) rangeEnd   else streamingVersets.size - 1
 
+        // Boucle sur le verset courant (répétition individuelle)
         if (loopEnabled) {
-            val shouldContinue = loopCount == 0 || currentLoop < loopCount - 1
-            if (shouldContinue) {
+            val shouldRepeatVerset = loopCount == 0 || currentLoop < loopCount - 1
+            if (shouldRepeatVerset) {
                 currentLoop++
-                // Boucle sur le verset courant
                 playStreamingVerset(streamingVersetIndex)
-                emitState(); return
+                emitState()
+                return
             } else {
                 currentLoop = 0
-                // Si plage définie → revenir au début de la plage
-                if (rangeStart >= 0) {
-                    streamingVersetIndex = rangeStart
-                    playStreamingVerset(rangeStart)
-                    emitState(); return
-                }
+                // Après avoir épuisé les répétitions du verset → passer au suivant
             }
         }
 
-        // Passer au verset suivant
+        // Passer au verset suivant dans la plage
         val next = streamingVersetIndex + 1
         if (next <= effectiveEnd) {
             streamingVersetIndex = next
             playStreamingVerset(next)
         } else {
             // Fin de la plage (ou de la sourate)
-            if (rangeStart >= 0 && loopEnabled) {
-                // Boucle sur la plage entière
-                streamingVersetIndex = rangeStart
-                playStreamingVerset(rangeStart)
+            if (rangeStart >= 0) {
+                // FIX RÉPÉTITION DE PLAGE : vérifier si on doit répéter la plage entière
+                val shouldRepeatRange = rangeLoopCount == 0 || rangeCurrentLoop < rangeLoopCount - 1
+                if (shouldRepeatRange) {
+                    rangeCurrentLoop++
+                    streamingVersetIndex = rangeStart
+                    currentLoop          = 0
+                    playStreamingVerset(rangeStart)
+                } else {
+                    // Plage terminée
+                    rangeCurrentLoop = 0
+                    streamingVersetIndex = rangeStart
+                    player.pause()
+                }
             } else {
-                streamingVersetIndex = rangeStart.coerceAtLeast(0)
+                // Pas de plage → fin de sourate → pause
                 player.pause()
             }
         }
@@ -265,11 +280,13 @@ class AudioPlayerService : LifecycleService() {
 
     fun stopPlayback() {
         player.stop()
-        streamingMode  = false
-        streamingReady = false
-        currentLoop    = 0
-        rangeStart     = -1
-        rangeEnd       = -1
+        player.clearMediaItems()
+        streamingMode    = false
+        streamingReady   = false
+        currentLoop      = 0
+        rangeStart       = -1
+        rangeEnd         = -1
+        rangeCurrentLoop = 0
         stopProgressUpdates()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -277,28 +294,36 @@ class AudioPlayerService : LifecycleService() {
 
     fun seekTo(posMs: Long) { player.seekTo(posMs); emitState() }
 
-    // FIX BUG VERSET : seekToVerset charge le bon verset directement
     fun seekToVerset(versetIndex: Int) {
         if (!streamingMode || !streamingReady) return
         val idx = versetIndex.coerceIn(0, streamingVersets.size - 1)
         streamingVersetIndex = idx
-        currentLoop = 0
+        currentLoop          = 0
         playStreamingVerset(idx)
     }
 
-    // Définir une plage de versets pour la boucle (ex: verset 2 à 5)
-    fun setVersetRange(startIndex: Int, endIndex: Int) {
-        rangeStart = startIndex.coerceIn(0, streamingVersets.size - 1)
-        rangeEnd   = endIndex.coerceIn(rangeStart, streamingVersets.size - 1)
+    /**
+     * FIX NOUVEAU — Définir une plage avec répétition.
+     * @param startIndex index de début (0-based)
+     * @param endIndex   index de fin (0-based)
+     * @param loopCount  nombre de fois à répéter la plage (0 = infini)
+     */
+    fun setVersetRange(startIndex: Int, endIndex: Int, loopCount: Int = 1) {
+        rangeStart       = startIndex.coerceIn(0, streamingVersets.size - 1)
+        rangeEnd         = endIndex.coerceIn(rangeStart, streamingVersets.size - 1)
+        rangeLoopCount   = loopCount.coerceAtLeast(0)
+        rangeCurrentLoop = 0
         streamingVersetIndex = rangeStart
-        currentLoop = 0
+        currentLoop      = 0
         playStreamingVerset(rangeStart)
         emitState()
     }
 
     fun clearVersetRange() {
-        rangeStart = -1
-        rangeEnd   = -1
+        rangeStart       = -1
+        rangeEnd         = -1
+        rangeLoopCount   = 1
+        rangeCurrentLoop = 0
         emitState()
     }
 
@@ -315,14 +340,16 @@ class AudioPlayerService : LifecycleService() {
     fun setSpeed(speed: Float) { player.playbackParameters = PlaybackParameters(speed); emitState() }
     fun setVersetId(id: Long?) { currentVersetId = id }
 
-    fun getCurrentPosition(): Long = player.currentPosition
-    fun getDuration(): Long        = if (player.duration > 0) player.duration else 0L
-    fun isPlaying(): Boolean       = player.isPlaying
-    fun isStreamingMode(): Boolean = streamingMode
+    fun getCurrentPosition(): Long  = player.currentPosition
+    fun getDuration(): Long         = if (player.duration > 0) player.duration else 0L
+    fun isPlaying(): Boolean        = player.isPlaying
+    fun isStreamingMode(): Boolean  = streamingMode
     fun isStreamingReady(): Boolean = streamingReady
     fun getCurrentStreamingVersetIndex(): Int = streamingVersetIndex
-    fun getRangeStart(): Int = rangeStart
-    fun getRangeEnd(): Int   = rangeEnd
+    fun getRangeStart(): Int        = rangeStart
+    fun getRangeEnd(): Int          = rangeEnd
+    fun getRangeLoopCount(): Int    = rangeLoopCount
+    fun getRangeCurrentLoop(): Int  = rangeCurrentLoop
 
     private fun startProgressUpdates() {
         progressJob?.cancel()
@@ -342,19 +369,21 @@ class AudioPlayerService : LifecycleService() {
 
     private fun emitState() {
         playerState.postValue(PlayerState(
-            isPlaying       = player.isPlaying,
-            currentPosition = player.currentPosition.coerceAtLeast(0L),
-            duration        = if (player.duration > 0L) player.duration else 0L,
-            sourateId       = currentSourateId,
-            versetId        = currentVersetId,
-            loopEnabled     = loopEnabled,
-            loopCount       = loopCount,
-            loopCurrent     = currentLoop,
-            speed           = player.playbackParameters.speed,
-            segmentStart    = segmentStart,
-            segmentEnd      = segmentEnd,
-            rangeStart      = rangeStart,
-            rangeEnd        = rangeEnd
+            isPlaying        = player.isPlaying,
+            currentPosition  = player.currentPosition.coerceAtLeast(0L),
+            duration         = if (player.duration > 0L) player.duration else 0L,
+            sourateId        = currentSourateId,
+            versetId         = currentVersetId,
+            loopEnabled      = loopEnabled,
+            loopCount        = loopCount,
+            loopCurrent      = currentLoop,
+            speed            = player.playbackParameters.speed,
+            segmentStart     = segmentStart,
+            segmentEnd       = segmentEnd,
+            rangeStart       = rangeStart,
+            rangeEnd         = rangeEnd,
+            rangeLoopCount   = rangeLoopCount,
+            rangeCurrentLoop = rangeCurrentLoop
         ))
     }
 
