@@ -9,6 +9,8 @@ import com.hifz.quran.ui.player.PlayerFragment
 import com.hifz.quran.ui.stats.StatsFragment
 import com.hifz.quran.ui.settings.SettingsFragment
 import com.hifz.quran.ui.surah.SurahListFragment
+import androidx.lifecycle.ViewModelProvider
+import com.hifz.quran.ui.player.PlayerViewModel
 
 class MainActivity : AppCompatActivity() {
 
