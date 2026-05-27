@@ -15,8 +15,8 @@ import com.hifz.quran.util.TimeUtils
 
 class VersetAdapter(
     private val onPlay:         (Verset) -> Unit,
-    private val onStatusChange: (Verset, VersetStatus) -> Unit,
-    private val onDelete:       (Verset) -> Unit
+    private val onStatusChange: (Verset, VersetStatus) -> Unit
+    // FIX : suppression de onDelete — le bouton supprimer est retiré de l'UI
 ) : ListAdapter<Verset, VersetAdapter.VH>(DIFF) {
 
     private var activeVersetId: Long = -1L
@@ -41,13 +41,15 @@ class VersetAdapter(
         val isActive = v.id == activeVersetId
 
         with(holder.binding) {
+
+            // FIX : masquer le bouton supprimer
+            btnDelete.visibility = View.GONE
+
             tvVersetNum.text = "V.${v.numero}"
 
             if (v.arabicText.isNotEmpty()) {
                 tvTimeRange.visibility     = View.GONE
                 tvArabicSnippet.visibility = View.VISIBLE
-                // BUG FIX #2 — Texte tronqué à 60 chars dans l'adapter mais maxLines=2 dans le XML
-                // → on affiche jusqu'à 80 chars pour les sourates longues, sans jamais couper un mot
                 tvArabicSnippet.text = v.arabicText.take(80).let {
                     if (v.arabicText.length > 80) "$it…" else it
                 }
@@ -57,12 +59,6 @@ class VersetAdapter(
                 tvTimeRange.text = "${TimeUtils.formatMs(v.startMs)} → ${TimeUtils.formatMs(v.endMs)}"
             }
 
-            // BUG FIX #2 — Compteur 0x toujours affiché :
-            // CAUSE : DiffUtil.areContentsTheSame() compare v.repeatCount — si le ViewModel
-            //         postValue() avec la même liste d'objets (même référence), DiffUtil
-            //         ne voit pas de changement.
-            // FIX : submitList(list.toList()) dans PlayerFragment force une nouvelle instance.
-            //       Ici on affiche toujours la valeur fraîche de v.repeatCount.
             tvRepeats.text = when (v.repeatCount) {
                 0    -> "Jamais écouté"
                 1    -> "1× écouté"
@@ -82,9 +78,8 @@ class VersetAdapter(
             )
             ivPlaying.visibility = if (isActive) View.VISIBLE else View.GONE
 
-            btnPlay.setOnClickListener   { onPlay(v) }
-            btnDelete.setOnClickListener { onDelete(v) }
-            root.setOnClickListener      { onPlay(v) }
+            btnPlay.setOnClickListener { onPlay(v) }
+            root.setOnClickListener   { onPlay(v) }
             tvStatus.setOnClickListener {
                 val next = when (v.status) {
                     VersetStatus.A_APPRENDRE -> VersetStatus.EN_COURS
@@ -99,7 +94,6 @@ class VersetAdapter(
     companion object {
         val DIFF = object : DiffUtil.ItemCallback<Verset>() {
             override fun areItemsTheSame(a: Verset, b: Verset)    = a.id == b.id
-            // BUG FIX : comparer aussi repeatCount pour forcer le rebind quand il change
             override fun areContentsTheSame(a: Verset, b: Verset) = a == b
         }
     }
