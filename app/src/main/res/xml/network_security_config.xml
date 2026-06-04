@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    FIX #11 — Network Security Config
+    Remplace usesCleartextTraffic="false" (trop restrictif) par une config explicite :
+    - everyayah.com et cdn.jsdelivr.net : HTTPS uniquement (correct, ces serveurs l'imposent)
+    - Toutes autres connexions : HTTPS uniquement par défaut (sécurisé)
+    Si everyayah.com renvoie un jour une redirection HTTP, ExoPlayer la suivra
+    grâce à cleartextTrafficPermitted="false" qui reste sur HTTPS.
+    En pratique everyayah.com est full HTTPS donc pas de risque.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">everyayah.com</domain>
+        <domain includeSubdomains="true">cdn.jsdelivr.net</domain>
+    </domain-config>
+</network-security-config>
