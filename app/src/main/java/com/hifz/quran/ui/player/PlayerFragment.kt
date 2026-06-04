@@ -10,6 +10,7 @@ import android.os.IBinder
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.CompoundButton
 import android.widget.NumberPicker
 import android.widget.SeekBar
 import androidx.fragment.app.Fragment
@@ -37,6 +38,13 @@ class PlayerFragment : Fragment() {
     private var isSeeking     = false
     private var isSegmentMode = false
 
+    // FIX #1 — flag pour éviter le double chargement (race condition)
+    private var sourateLoadedIntoService = false
+
+    // FIX #10 — tracker le verset et les répétitions pour endSession()
+    private var lastActiveVersetId: Long? = null
+    private var sessionRepeatsDone: Int   = 0
+
     private var isPlayerReady = false
         set(value) {
             field = value
@@ -52,6 +60,8 @@ class PlayerFragment : Fragment() {
             isBound = true
 
             playerService?.onVersetPlayed = { versetId ->
+                lastActiveVersetId = versetId
+                sessionRepeatsDone++
                 vm.incrementRepeat(versetId)
             }
 
@@ -59,16 +69,21 @@ class PlayerFragment : Fragment() {
                 observePlayerState()
                 serviceObserverAttached = true
             }
+
+            // FIX #1 — on ne charge PAS ici : c'est vm.versets.observe() qui est
+            // le seul point de vérité pour déclencher loadSourateIntoService()
+            // Cela évite la race condition double-chargement.
+            // On vérifie juste si on doit mettre à jour isPlayerReady.
             val sourate = vm.currentSourate.value ?: return
-            val svc = playerService ?: return
-            if (!svc.isPlaying()) {
-                loadSourateIntoService(sourate, vm.versets.value ?: emptyList())
+            if (!sourate.isFromLibrary) {
+                isPlayerReady = sourate.filePath.isNotBlank()
             }
         }
         override fun onServiceDisconnected(name: ComponentName?) {
             isBound = false
             playerService = null
             serviceObserverAttached = false
+            sourateLoadedIntoService = false
             isPlayerReady = false
         }
     }
@@ -90,6 +105,7 @@ class PlayerFragment : Fragment() {
         vm = ViewModelProvider(requireActivity())[PlayerViewModel::class.java]
 
         isPlayerReady = false
+        sourateLoadedIntoService = false
 
         val sourateId = arguments?.getLong(ARG_SOURATE_ID, -1L) ?: -1L
         if (sourateId != -1L) vm.loadSourate(sourateId)
@@ -105,7 +121,6 @@ class PlayerFragment : Fragment() {
     }
 
     private fun setupVersetList() {
-        // FIX : suppression du paramètre onDelete
         versetAdapter = VersetAdapter(
             onPlay         = { verset -> playVerset(verset) },
             onStatusChange = { verset, status -> vm.updateStatus(verset.id, status) }
@@ -157,9 +172,9 @@ class PlayerFragment : Fragment() {
             binding.btnSegmentMode.isSelected = isSegmentMode
         }
 
-        binding.switchLoop.setOnCheckedChangeListener { _, checked ->
-            vm.setLoopEnabled(checked)
-        }
+        // FIX #7 — Le listener du Switch est attaché séparément via setupLoopSwitch()
+        // pour éviter la boucle infinie quand on met isChecked programmatiquement
+        setupLoopSwitch()
 
         binding.btnLoopMinus.setOnClickListener { vm.setLoopCount(maxOf(0, (vm.loopCount.value ?: 3) - 1)) }
         binding.btnLoopPlus.setOnClickListener  { vm.setLoopCount(minOf(99, (vm.loopCount.value ?: 3) + 1)) }
@@ -191,6 +206,17 @@ class PlayerFragment : Fragment() {
         }
     }
 
+    // FIX #7 — Listener du Switch isolé pour éviter la boucle infinie
+    // On retire le listener avant de modifier isChecked, puis on le remet
+    private var loopSwitchListener: CompoundButton.OnCheckedChangeListener? = null
+
+    private fun setupLoopSwitch() {
+        loopSwitchListener = CompoundButton.OnCheckedChangeListener { _, checked ->
+            vm.setLoopEnabled(checked)
+        }
+        binding.switchLoop.setOnCheckedChangeListener(loopSwitchListener)
+    }
+
     private fun observeViewModel() {
         vm.currentSourate.observe(viewLifecycleOwner) { sourate ->
             if (sourate != null) {
@@ -209,6 +235,8 @@ class PlayerFragment : Fragment() {
                     binding.cardSegment.visibility    = View.VISIBLE
                     binding.btnSelectRange.visibility = View.GONE
                 }
+                // Changement de sourate → reset du flag de chargement
+                sourateLoadedIntoService = false
             } else {
                 binding.tvSourateName.text   = "Aucune sourate sélectionnée"
                 binding.tvSourateArabic.text = "Ajoutez une sourate depuis la bibliothèque"
@@ -220,19 +248,38 @@ class PlayerFragment : Fragment() {
             binding.tvNoVersets.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
 
             val sourate = vm.currentSourate.value ?: return@observe
-            if (sourate.isFromLibrary && list.isNotEmpty() && isBound) {
+
+            if (sourate.isFromLibrary) {
+                // FIX #4 — Vérifier que la sourate a bien des versets avant de charger
+                if (list.isEmpty()) {
+                    isPlayerReady = false
+                    return@observe
+                }
+                if (!isBound) return@observe
                 val svc = playerService ?: return@observe
-                if (!svc.isStreamingReady() || !svc.isPlaying()) {
+
+                // FIX #1 — Un seul chargement : si déjà chargé + en cours → ne rien faire
+                if (!sourateLoadedIntoService) {
+                    sourateLoadedIntoService = true
+                    loadSourateIntoService(sourate, list)
+                } else if (!svc.isStreamingReady()) {
+                    // Le service a été recréé (ex : process kill) → recharger
+                    sourateLoadedIntoService = false
                     loadSourateIntoService(sourate, list)
                 }
                 isPlayerReady = true
-            } else if (!sourate.isFromLibrary) {
-                isPlayerReady = isBound
+
+            } else {
+                // FIX #4 — Mode fichier : vérifier que le chemin existe
+                isPlayerReady = isBound && sourate.filePath.isNotBlank()
             }
         }
 
+        // FIX #7 — Mise à jour du Switch sans déclencher le listener
         vm.loopEnabled.observe(viewLifecycleOwner) { enabled ->
+            binding.switchLoop.setOnCheckedChangeListener(null)
             binding.switchLoop.isChecked = enabled
+            binding.switchLoop.setOnCheckedChangeListener(loopSwitchListener)
             playerService?.setLoop(enabled, vm.loopCount.value ?: 3)
         }
 
@@ -263,7 +310,10 @@ class PlayerFragment : Fragment() {
             binding.btnPlayPause.setImageResource(if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play)
             binding.tvSpeed.text = "${"%.2f".format(state.speed)}x"
 
-            state.versetId?.let { versetAdapter.setActiveVerset(it) }
+            state.versetId?.let { id ->
+                lastActiveVersetId = id
+                versetAdapter.setActiveVerset(id)
+            }
 
             if (state.loopEnabled) {
                 val max = if (state.loopCount == 0) "∞" else "${state.loopCount}"
@@ -281,7 +331,7 @@ class PlayerFragment : Fragment() {
                 binding.tvVersetNumBadge.text     = "Verset ${idx + 1} / ${versets.size}"
                 binding.cardArabicText.visibility = View.VISIBLE
                 if (verset?.arabicText?.isNotEmpty() == true) {
-                    binding.tvVersetArabic.text      = verset.arabicText
+                    binding.tvVersetArabic.text       = verset.arabicText
                     binding.tvVersetArabic.visibility = View.VISIBLE
                 } else binding.tvVersetArabic.visibility = View.GONE
                 if (verset?.transliteration?.isNotEmpty() == true) {
@@ -289,7 +339,6 @@ class PlayerFragment : Fragment() {
                     binding.tvVersetTranslit.visibility = View.VISIBLE
                 } else binding.tvVersetTranslit.visibility = View.GONE
 
-                // Afficher infos plage + compteur de répétition de plage
                 if (state.rangeStart >= 0) {
                     val loopInfo = when {
                         state.rangeLoopCount == 0 -> " · ∞"
@@ -348,24 +397,17 @@ class PlayerFragment : Fragment() {
         }
     }
 
-    /**
-     * FIX NOUVEAU — Sélection de plage avec choix du nombre de répétitions.
-     * L'utilisateur choisit verset de début, verset de fin,
-     * et combien de fois répéter la plage (1 = une fois, 0 = infini).
-     */
     private fun showRangePicker() {
         val versets = vm.versets.value ?: return
         if (versets.size < 2) return
 
         val labels = versets.map { "V.${it.numero}" }.toTypedArray()
 
-        // Conteneur principal vertical
         val mainLayout = android.widget.LinearLayout(requireContext()).apply {
             orientation = android.widget.LinearLayout.VERTICAL
             setPadding(32, 24, 32, 8)
         }
 
-        // Ligne 1 : sélection plage (début → fin)
         val rangeRow = android.widget.LinearLayout(requireContext()).apply {
             orientation = android.widget.LinearLayout.HORIZONTAL
             gravity     = android.view.Gravity.CENTER
@@ -384,7 +426,6 @@ class PlayerFragment : Fragment() {
         rangeRow.addView(tvArrow)
         rangeRow.addView(npEnd)
 
-        // Ligne 2 : label "Répétitions de la plage"
         val tvRepeatLabel = android.widget.TextView(requireContext()).apply {
             text      = "Répétitions de la plage"
             textSize  = 13f
@@ -392,18 +433,16 @@ class PlayerFragment : Fragment() {
             setPadding(0, 24, 0, 4)
         }
 
-        // Ligne 3 : sélecteur du nombre de répétitions
         val repeatRow = android.widget.LinearLayout(requireContext()).apply {
             orientation = android.widget.LinearLayout.HORIZONTAL
             gravity     = android.view.Gravity.CENTER
         }
-        // Labels : 1×, 2×, ... 10×, ∞ (0)
         val repeatLabels = (1..10).map { "${it}×" }.toMutableList().apply { add("∞") }.toTypedArray()
         val npRepeat = NumberPicker(requireContext()).apply {
             minValue        = 0
             maxValue        = repeatLabels.size - 1
             displayedValues = repeatLabels
-            value           = 0   // défaut : 1×
+            value           = 0
         }
         repeatRow.addView(npRepeat)
 
@@ -418,7 +457,6 @@ class PlayerFragment : Fragment() {
             .setPositiveButton("Appliquer") { _, _ ->
                 val start      = npStart.value
                 val end        = maxOf(npEnd.value, start)
-                // 0-indexed dans repeatLabels → valeur réelle : index+1, sauf dernier = 0 (infini)
                 val loopCount  = if (npRepeat.value == repeatLabels.size - 1) 0 else npRepeat.value + 1
                 playerService?.setVersetRange(start, end, loopCount)
 
@@ -464,8 +502,11 @@ class PlayerFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        // FIX #10 — Sauvegarder les vraies stats de session (versetId + répétitions réelles)
         val sourate = vm.currentSourate.value
-        if (sourate != null) vm.endSession(sourate.id, null, 0)
+        if (sourate != null) {
+            vm.endSession(sourate.id, lastActiveVersetId, sessionRepeatsDone)
+        }
         if (isBound) {
             playerService?.onVersetPlayed = null
             requireContext().unbindService(serviceConnection)
@@ -473,6 +514,7 @@ class PlayerFragment : Fragment() {
             playerService = null
             serviceObserverAttached = false
         }
+        sourateLoadedIntoService = false
         super.onDestroyView()
         _binding = null
     }
