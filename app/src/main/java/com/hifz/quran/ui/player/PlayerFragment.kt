@@ -38,8 +38,9 @@ class PlayerFragment : Fragment() {
     private var isSeeking     = false
     private var isSegmentMode = false
 
-    // FIX #1 — flag pour éviter le double chargement (race condition)
-    private var sourateLoadedIntoService = false
+    // Le flag de chargement est maintenant dans le ViewModel (survit à la recréation du fragment)
+    // On garde un flag local uniquement pour la connexion courante au service
+    private var serviceJustConnected = false
 
     // FIX #10 — tracker le verset et les répétitions pour endSession()
     private var lastActiveVersetId: Long? = null
@@ -70,20 +71,23 @@ class PlayerFragment : Fragment() {
                 serviceObserverAttached = true
             }
 
-            // FIX #1 — on ne charge PAS ici : c'est vm.versets.observe() qui est
-            // le seul point de vérité pour déclencher loadSourateIntoService()
-            // Cela évite la race condition double-chargement.
-            // On vérifie juste si on doit mettre à jour isPlayerReady.
+            serviceJustConnected = true
+
+            // Si la sourate est déjà chargée dans le service (retour de navigation) → juste UI
             val sourate = vm.currentSourate.value ?: return
             if (!sourate.isFromLibrary) {
                 isPlayerReady = sourate.filePath.isNotBlank()
+            } else if (vm.isSourateLoadedInService) {
+                // Service déjà prêt → on affiche directement le lecteur sans recharger
+                isPlayerReady = true
             }
         }
         override fun onServiceDisconnected(name: ComponentName?) {
             isBound = false
             playerService = null
             serviceObserverAttached = false
-            sourateLoadedIntoService = false
+            serviceJustConnected = false
+            vm.resetServiceLoadState()
             isPlayerReady = false
         }
     }
@@ -105,7 +109,7 @@ class PlayerFragment : Fragment() {
         vm = ViewModelProvider(requireActivity())[PlayerViewModel::class.java]
 
         isPlayerReady = false
-        sourateLoadedIntoService = false
+        serviceJustConnected = false
 
         val sourateId = arguments?.getLong(ARG_SOURATE_ID, -1L) ?: -1L
         if (sourateId != -1L) vm.loadSourate(sourateId)
@@ -114,8 +118,12 @@ class PlayerFragment : Fragment() {
         setupControls()
         observeViewModel()
 
+        // CRASH FIX — startForegroundService() seul peut provoquer un ANR/crash si le service
+        // ne fait pas startForeground() dans les 5 secondes (avant qu'une sourate soit chargée).
+        // On utilise uniquement bindService avec BIND_AUTO_CREATE : Android démarre le service
+        // automatiquement si besoin, et startForeground() est appelé dans loadAudio/loadStreaming
+        // seulement quand il y a vraiment quelque chose à jouer.
         val intent = Intent(requireContext(), AudioPlayerService::class.java)
-        requireContext().startForegroundService(intent)
         requireContext().bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
         vm.startSession()
     }
@@ -235,8 +243,8 @@ class PlayerFragment : Fragment() {
                     binding.cardSegment.visibility    = View.VISIBLE
                     binding.btnSelectRange.visibility = View.GONE
                 }
-                // Changement de sourate → reset du flag de chargement
-                sourateLoadedIntoService = false
+                // Changement de sourate → reset du flag dans le ViewModel
+                vm.resetServiceLoadState()
             } else {
                 binding.tvSourateName.text   = "Aucune sourate sélectionnée"
                 binding.tvSourateArabic.text = "Ajoutez une sourate depuis la bibliothèque"
@@ -250,7 +258,6 @@ class PlayerFragment : Fragment() {
             val sourate = vm.currentSourate.value ?: return@observe
 
             if (sourate.isFromLibrary) {
-                // FIX #4 — Vérifier que la sourate a bien des versets avant de charger
                 if (list.isEmpty()) {
                     isPlayerReady = false
                     return@observe
@@ -258,16 +265,18 @@ class PlayerFragment : Fragment() {
                 if (!isBound) return@observe
                 val svc = playerService ?: return@observe
 
-                // FIX #1 — Un seul chargement : si déjà chargé + en cours → ne rien faire
-                if (!sourateLoadedIntoService) {
-                    sourateLoadedIntoService = true
-                    loadSourateIntoService(sourate, list)
-                } else if (!svc.isStreamingReady()) {
-                    // Le service a été recréé (ex : process kill) → recharger
-                    sourateLoadedIntoService = false
-                    loadSourateIntoService(sourate, list)
+                when {
+                    // Sourate déjà chargée dans le service → rien à faire, juste afficher
+                    vm.isSourateLoadedInService && svc.isStreamingReady() -> {
+                        isPlayerReady = true
+                    }
+                    // Service perdu ou sourate pas encore chargée → charger
+                    else -> {
+                        loadSourateIntoService(sourate, list)
+                        vm.markSourateLoadedInService()
+                        isPlayerReady = true
+                    }
                 }
-                isPlayerReady = true
 
             } else {
                 // FIX #4 — Mode fichier : vérifier que le chemin existe
@@ -513,8 +522,8 @@ class PlayerFragment : Fragment() {
             isBound = false
             playerService = null
             serviceObserverAttached = false
+            serviceJustConnected = false
         }
-        sourateLoadedIntoService = false
         super.onDestroyView()
         _binding = null
     }
