@@ -20,17 +20,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private val _currentSourate = MutableLiveData<Sourate?>(null)
     val currentSourate: LiveData<Sourate?> = _currentSourate
 
-    // FIX #6 — Remplacement de observeForever par switchMap (lifecycle-aware)
-    // Avantage : pas besoin de gérer manuellement removeObserver/onCleared
-    // Le LiveData de versets se met à jour automatiquement quand sourateId change,
-    // sans risque de fuite mémoire ni d'observer fantôme en cas d'appels multiples
     private val _sourateId = MutableLiveData<Long?>(null)
     val versets: LiveData<List<Verset>> = _sourateId.switchMap { id ->
-        if (id == null || id <= 0L) {
-            MutableLiveData(emptyList())
-        } else {
-            repo.getVersetsBySourate(id)
-        }
+        if (id == null || id <= 0L) MutableLiveData(emptyList())
+        else repo.getVersetsBySourate(id)
     }
 
     val loopEnabled  = MutableLiveData(false)
@@ -38,15 +31,34 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     val segmentStart = MutableLiveData(0L)
     val segmentEnd   = MutableLiveData(0L)
 
+    // PERSISTANCE ÉTAT — le ViewModel survit à la recréation du fragment (Activity scope).
+    // On garde ici si la sourate a déjà été chargée dans le service, pour que
+    // lorsqu'un nouveau PlayerFragment est créé avec le MÊME sourateId,
+    // il ne recharge pas le service depuis zéro (évite le rechargement après navigation).
+    var isSourateLoadedInService: Boolean = false
+        private set
+
     private var sessionStartTime = 0L
 
     fun loadSourate(id: Long) {
+        // Si même sourate déjà chargée → ne pas recharger le LiveData ni le service
+        if (_sourateId.value == id && _currentSourate.value != null) return
+        isSourateLoadedInService = false
         viewModelScope.launch {
             val sourate = repo.getSourateById(id)
             _currentSourate.postValue(sourate)
-            // FIX #6 — on met à jour _sourateId pour déclencher switchMap
             _sourateId.postValue(id)
         }
+    }
+
+    /** Appelé par le Fragment quand le service a bien reçu la sourate */
+    fun markSourateLoadedInService() {
+        isSourateLoadedInService = true
+    }
+
+    /** Appelé quand on veut forcer le rechargement (sourate différente) */
+    fun resetServiceLoadState() {
+        isSourateLoadedInService = false
     }
 
     fun toggleLoop()                     { loopEnabled.value = !(loopEnabled.value ?: false) }
@@ -88,7 +100,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startSession() { sessionStartTime = System.currentTimeMillis() }
 
-    // FIX #10 — Accepte les vraies valeurs de versetId et repeatsDone
     fun endSession(sourateId: Long, versetId: Long?, repeatsDone: Int) {
         val duration = System.currentTimeMillis() - sessionStartTime
         if (duration < 1000) return
@@ -103,7 +114,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // FIX #6 — onCleared() simplifié : plus besoin de removeObserver manuel
     override fun onCleared() {
         super.onCleared()
     }
