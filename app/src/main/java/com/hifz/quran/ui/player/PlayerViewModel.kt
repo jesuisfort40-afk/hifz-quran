@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.switchMap
 import androidx.lifecycle.viewModelScope
 import com.hifz.quran.db.HifzRepository
 import com.hifz.quran.model.Session
@@ -24,7 +25,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     // Le LiveData de versets se met à jour automatiquement quand sourateId change,
     // sans risque de fuite mémoire ni d'observer fantôme en cas d'appels multiples
     private val _sourateId = MutableLiveData<Long?>(null)
-    val versets: LiveData<List<Verset>> = androidx.lifecycle.Transformations.switchMap(_sourateId) { id ->
+    val versets: LiveData<List<Verset>> = _sourateId.switchMap { id ->
         if (id == null || id <= 0L) {
             MutableLiveData(emptyList())
         } else {
