@@ -9,6 +9,7 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.hifz.quran.R
@@ -18,6 +19,7 @@ import com.hifz.quran.data.SurahInfo
 import com.hifz.quran.databinding.FragmentSurahBrowserBinding
 import com.hifz.quran.ui.player.PlayerFragment
 import com.hifz.quran.MainActivity
+import kotlinx.coroutines.launch
 
 class SurahBrowserFragment : Fragment() {
 
@@ -101,47 +103,61 @@ class SurahBrowserFragment : Fragment() {
         browserAdapter = SurahBrowserAdapter { surah ->
             confirmImport(surah)
         }
-
-        // FIX : LinearLayoutManager manquant → RecyclerView affichait 0 item
         binding.rvBrowser.layoutManager = LinearLayoutManager(requireContext())
         binding.rvBrowser.adapter = browserAdapter
         browserAdapter.submitList(allSurahs)
         binding.tvResultCount.text = "${allSurahs.size} sourates"
     }
 
+    // FIX #8 — confirmImport utilise la version suspend (isSurahAlreadyImportedSafe)
+    // pour garantir une vérification correcte même si le LiveData n'est pas encore chargé
     private fun confirmImport(surah: SurahInfo) {
-        val alreadyExists = vm.isSurahAlreadyImported(surah.number, selectedReciter.id)
+        viewLifecycleOwner.lifecycleScope.launch {
+            val alreadyExists = vm.isSurahAlreadyImportedSafe(surah.number, selectedReciter.id)
 
-        if (alreadyExists) {
+            if (_binding == null) return@launch
+
+            if (alreadyExists) {
+                MaterialAlertDialogBuilder(requireContext())
+                    .setTitle("Déjà importée")
+                    .setMessage(
+                        "${surah.nameArabic} (${surah.nameLatin}) est déjà dans ta bibliothèque " +
+                        "avec ce récitateur.\n\nOuvrir la sourate ?"
+                    )
+                    .setPositiveButton("Ouvrir") { _, _ ->
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            val id = vm.getExistingSurahIdSafe(surah.number, selectedReciter.id)
+                            if (id != null) openPlayer(id)
+                        }
+                    }
+                    .setNegativeButton("Annuler", null)
+                    .show()
+                return@launch
+            }
+
+            // FIX #9 — Message corrigé : on télécharge le texte arabe (~10 Ko)
+            // L'audio est streamé en temps réel (pas téléchargé localement)
+            val audioInfo = if (surah.verseCount <= 10) {
+                "🎵 Audio streamé verset par verset (connexion requise)."
+            } else {
+                "🎵 Audio streamé verset par verset.\n⚠️ Connexion recommandée pour ${surah.verseCount} versets."
+            }
+
             MaterialAlertDialogBuilder(requireContext())
-                .setTitle("Déjà importée")
+                .setTitle("Importer cette sourate ?")
                 .setMessage(
-                    "${surah.nameArabic} (${surah.nameLatin}) est déjà dans ta bibliothèque " +
-                    "avec ce récitateur.\n\nOuvrir la sourate ?"
+                    "${surah.nameArabic}\n${surah.nameLatin} — ${surah.nameFr}\n\n" +
+                    "📖 ${surah.verseCount} versets\n" +
+                    "🎙️ ${selectedReciter.displayName}\n\n" +
+                    "📥 Texte arabe téléchargé (~10 Ko).\n" +
+                    audioInfo
                 )
-                .setPositiveButton("Ouvrir") { _, _ ->
-                    val id = vm.getExistingSurahId(surah.number, selectedReciter.id)
-                    if (id != null) openPlayer(id)
+                .setPositiveButton("Importer") { _, _ ->
+                    importSurah(surah)
                 }
                 .setNegativeButton("Annuler", null)
                 .show()
-            return
         }
-
-        MaterialAlertDialogBuilder(requireContext())
-            .setTitle("Importer cette sourate ?")
-            .setMessage(
-                "${surah.nameArabic}\n${surah.nameLatin} — ${surah.nameFr}\n\n" +
-                "📖 ${surah.verseCount} versets\n" +
-                "🎙️ ${selectedReciter.displayName}\n\n" +
-                "Le texte arabe sera téléchargé (~10 Ko).\n" +
-                "L'audio est streamé verset par verset."
-            )
-            .setPositiveButton("Importer") { _, _ ->
-                importSurah(surah)
-            }
-            .setNegativeButton("Annuler", null)
-            .show()
     }
 
     private fun importSurah(surah: SurahInfo) {
