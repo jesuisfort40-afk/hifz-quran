@@ -17,7 +17,6 @@ import com.hifz.quran.data.QuranData
 import com.hifz.quran.data.ReciterInfo
 import com.hifz.quran.data.SurahInfo
 import com.hifz.quran.databinding.FragmentSurahBrowserBinding
-import com.hifz.quran.ui.player.PlayerFragment
 import com.hifz.quran.MainActivity
 import kotlinx.coroutines.launch
 
@@ -61,7 +60,6 @@ class SurahBrowserFragment : Fragment() {
             .map { "${it.nameArabic} — ${it.displayName}" }
             .toTypedArray()
         val currentIdx = QuranData.RECITERS.indexOf(selectedReciter).coerceAtLeast(0)
-
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("Choisir le récitateur")
             .setSingleChoiceItems(names, currentIdx) { dialog, which ->
@@ -77,44 +75,33 @@ class SurahBrowserFragment : Fragment() {
         binding.etSearch.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                filterSurahs(s?.toString() ?: "")
-            }
+            override fun afterTextChanged(s: Editable?) { filterSurahs(s?.toString() ?: "") }
         })
     }
 
     private fun filterSurahs(query: String) {
         val q = query.trim().lowercase()
-        val filtered = if (q.isEmpty()) {
-            allSurahs
-        } else {
-            allSurahs.filter {
-                it.nameLatin.lowercase().contains(q) ||
-                it.nameFr.lowercase().contains(q) ||
-                it.nameArabic.contains(q) ||
-                it.number.toString() == q
-            }
+        val filtered = if (q.isEmpty()) allSurahs else allSurahs.filter {
+            it.nameLatin.lowercase().contains(q) ||
+            it.nameFr.lowercase().contains(q) ||
+            it.nameArabic.contains(q) ||
+            it.number.toString() == q
         }
         browserAdapter.submitList(filtered)
         binding.tvResultCount.text = "${filtered.size} sourates"
     }
 
     private fun setupList() {
-        browserAdapter = SurahBrowserAdapter { surah ->
-            confirmImport(surah)
-        }
+        browserAdapter = SurahBrowserAdapter { surah -> confirmImport(surah) }
         binding.rvBrowser.layoutManager = LinearLayoutManager(requireContext())
         binding.rvBrowser.adapter = browserAdapter
         browserAdapter.submitList(allSurahs)
         binding.tvResultCount.text = "${allSurahs.size} sourates"
     }
 
-    // FIX #8 — confirmImport utilise la version suspend (isSurahAlreadyImportedSafe)
-    // pour garantir une vérification correcte même si le LiveData n'est pas encore chargé
     private fun confirmImport(surah: SurahInfo) {
         viewLifecycleOwner.lifecycleScope.launch {
             val alreadyExists = vm.isSurahAlreadyImportedSafe(surah.number, selectedReciter.id)
-
             if (_binding == null) return@launch
 
             if (alreadyExists) {
@@ -135,13 +122,10 @@ class SurahBrowserFragment : Fragment() {
                 return@launch
             }
 
-            // FIX #9 — Message corrigé : on télécharge le texte arabe (~10 Ko)
-            // L'audio est streamé en temps réel (pas téléchargé localement)
-            val audioInfo = if (surah.verseCount <= 10) {
+            val audioInfo = if (surah.verseCount <= 10)
                 "🎵 Audio streamé verset par verset (connexion requise)."
-            } else {
+            else
                 "🎵 Audio streamé verset par verset.\n⚠️ Connexion recommandée pour ${surah.verseCount} versets."
-            }
 
             MaterialAlertDialogBuilder(requireContext())
                 .setTitle("Importer cette sourate ?")
@@ -152,15 +136,21 @@ class SurahBrowserFragment : Fragment() {
                     "📥 Texte arabe téléchargé (~10 Ko).\n" +
                     audioInfo
                 )
-                .setPositiveButton("Importer") { _, _ ->
-                    importSurah(surah)
+                // BUG AUTO-LAUNCH — Bouton "Importer seulement" : importe sans ouvrir le lecteur
+                .setPositiveButton("Importer seulement") { _, _ ->
+                    importSurah(surah, openAfter = false)
+                }
+                // Bouton secondaire : importer ET ouvrir
+                .setNeutralButton("Importer et ouvrir") { _, _ ->
+                    importSurah(surah, openAfter = true)
                 }
                 .setNegativeButton("Annuler", null)
                 .show()
         }
     }
 
-    private fun importSurah(surah: SurahInfo) {
+    // BUG AUTO-LAUNCH — paramètre openAfter contrôle si on ouvre le lecteur après import
+    private fun importSurah(surah: SurahInfo, openAfter: Boolean) {
         binding.progressImport.visibility = View.VISIBLE
         binding.tvImportStatus.visibility = View.VISIBLE
         binding.tvImportStatus.text = "⏳ Importation de ${surah.nameLatin}…"
@@ -174,26 +164,19 @@ class SurahBrowserFragment : Fragment() {
                     binding.tvImportStatus.postDelayed({
                         if (_binding != null) binding.tvImportStatus.visibility = View.GONE
                     }, 2500)
-                    openPlayer(result)
+                    // N'ouvre le lecteur que si l'utilisateur l'a demandé explicitement
+                    if (openAfter) openPlayer(result)
                 }
                 else -> {
                     binding.tvImportStatus.text = "❌ Erreur. Vérifiez votre connexion."
-                    Toast.makeText(
-                        requireContext(),
-                        "Erreur d'importation",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    Toast.makeText(requireContext(), "Erreur d'importation", Toast.LENGTH_SHORT).show()
                 }
             }
         }
     }
 
     private fun openPlayer(sourateId: Long) {
-        val fragment = PlayerFragment.newInstance(sourateId)
-        (activity as? MainActivity)?.apply {
-            loadFragment(fragment, PlayerFragment::class.java.simpleName)
-            navigateTo(R.id.nav_player)
-        }
+        (activity as? MainActivity)?.openPlayer(sourateId)
     }
 
     override fun onDestroyView() {
