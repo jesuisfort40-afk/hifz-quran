@@ -4,7 +4,6 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
 import com.hifz.quran.db.HifzRepository
 import com.hifz.quran.model.Session
@@ -17,15 +16,22 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo = HifzRepository(app)
 
-    private val _currentSourate = MutableLiveData<Sourate?>()
+    private val _currentSourate = MutableLiveData<Sourate?>(null)
     val currentSourate: LiveData<Sourate?> = _currentSourate
 
-    val versets: MutableLiveData<List<Verset>> = MutableLiveData(emptyList())
-    private var currentVersetObserver: Observer<List<Verset>>? = null
-    private var currentVersetLiveData: LiveData<List<Verset>>? = null
-    private var expectedVersetCount = 0
+    // FIX #6 — Remplacement de observeForever par switchMap (lifecycle-aware)
+    // Avantage : pas besoin de gérer manuellement removeObserver/onCleared
+    // Le LiveData de versets se met à jour automatiquement quand sourateId change,
+    // sans risque de fuite mémoire ni d'observer fantôme en cas d'appels multiples
+    private val _sourateId = MutableLiveData<Long?>(null)
+    val versets: LiveData<List<Verset>> = androidx.lifecycle.Transformations.switchMap(_sourateId) { id ->
+        if (id == null || id <= 0L) {
+            MutableLiveData(emptyList())
+        } else {
+            repo.getVersetsBySourate(id)
+        }
+    }
 
-    // FIX : loopEnabled expose setLoopEnabled() en plus de toggleLoop()
     val loopEnabled  = MutableLiveData(false)
     val loopCount    = MutableLiveData(3)
     val segmentStart = MutableLiveData(0L)
@@ -37,28 +43,16 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val sourate = repo.getSourateById(id)
             _currentSourate.postValue(sourate)
-            if (sourate != null) {
-                expectedVersetCount = sourate.totalVersets
-                loadVersets(sourate.id)
-            }
+            // FIX #6 — on met à jour _sourateId pour déclencher switchMap
+            _sourateId.postValue(id)
         }
     }
 
-    private fun loadVersets(sourateId: Long) {
-        currentVersetObserver?.let { currentVersetLiveData?.removeObserver(it) }
-        val newObserver = Observer<List<Verset>> { list -> versets.postValue(list) }
-        val newLiveData = repo.getVersetsBySourate(sourateId)
-        newLiveData.observeForever(newObserver)
-        currentVersetObserver = newObserver
-        currentVersetLiveData = newLiveData
-    }
-
-    fun toggleLoop()             { loopEnabled.value = !(loopEnabled.value ?: false) }
-    // FIX : méthode directe pour le Switch
+    fun toggleLoop()                     { loopEnabled.value = !(loopEnabled.value ?: false) }
     fun setLoopEnabled(enabled: Boolean) { loopEnabled.value = enabled }
-    fun setLoopCount(count: Int) { loopCount.value = count }
-    fun setSegmentStart(ms: Long) { segmentStart.value = ms }
-    fun setSegmentEnd(ms: Long)   { segmentEnd.value   = ms }
+    fun setLoopCount(count: Int)         { loopCount.value = count }
+    fun setSegmentStart(ms: Long)        { segmentStart.value = ms }
+    fun setSegmentEnd(ms: Long)          { segmentEnd.value   = ms }
 
     fun saveVerset(startMs: Long, endMs: Long) {
         val sourateId = _currentSourate.value?.id ?: return
@@ -76,12 +70,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun updateStatus(versetId: Long, status: VersetStatus) {
         viewModelScope.launch {
             repo.updateVersetStatus(versetId, status)
-            // Vérifier les badges après changement de statut
             repo.checkAndUnlockBadges()
         }
     }
 
-    // FIX STATS : incrementRepeat utilisé aussi depuis le service (lecture auto)
     fun incrementRepeat(versetId: Long) {
         viewModelScope.launch {
             repo.incrementVersetRepeat(versetId)
@@ -95,6 +87,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startSession() { sessionStartTime = System.currentTimeMillis() }
 
+    // FIX #10 — Accepte les vraies valeurs de versetId et repeatsDone
     fun endSession(sourateId: Long, versetId: Long?, repeatsDone: Int) {
         val duration = System.currentTimeMillis() - sessionStartTime
         if (duration < 1000) return
@@ -109,8 +102,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // FIX #6 — onCleared() simplifié : plus besoin de removeObserver manuel
     override fun onCleared() {
-        currentVersetObserver?.let { currentVersetLiveData?.removeObserver(it) }
         super.onCleared()
     }
 }
