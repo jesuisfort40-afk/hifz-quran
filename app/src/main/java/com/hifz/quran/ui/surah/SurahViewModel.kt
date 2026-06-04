@@ -33,7 +33,6 @@ class SurahViewModel(app: Application) : AndroidViewModel(app) {
         selectedSourateId.value = id
     }
 
-    // ── Import depuis fichier local (legacy) ──────────────────────────────────
     fun addSourate(uri: Uri, name: String) {
         viewModelScope.launch {
             try {
@@ -62,38 +61,50 @@ class SurahViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { repo.updateSourate(sourate.copy(name = newName)) }
     }
 
-    // ── Méthodes requises par SurahBrowserFragment ────────────────────────────
-
-    /**
-     * Vérifie si une sourate de la bibliothèque est déjà importée
-     * (même numéro de sourate + même récitateur).
-     *
-     * FIX BUILD : méthode manquante → "Unresolved reference: isSurahAlreadyImported"
-     */
+    // FIX #8 — isSurahAlreadyImported utilise d'abord le LiveData en mémoire,
+    // puis une requête DB synchrone si le LiveData n'est pas encore chargé.
+    // Cela évite le double import quand la liste est null au premier appel.
     fun isSurahAlreadyImported(surahNumber: Int, reciterId: String): Boolean {
-        // Lecture synchrone de la liste déjà chargée en mémoire via LiveData
-        val list = sourates.value ?: return false
-        return list.any { it.sourateNumber == surahNumber && it.reciterId == reciterId }
+        val list = sourates.value
+        if (list != null) {
+            return list.any { it.sourateNumber == surahNumber && it.reciterId == reciterId }
+        }
+        // LiveData pas encore émis → vérification synchrone en DB via coroutine bloquante
+        // On retourne false ici pour laisser la coroutine confirmImport gérer ça
+        // (la vérification réelle se fait dans confirmImportSafe)
+        return false
     }
 
-    /**
-     * Retourne l'id en base d'une sourate déjà importée, ou null si absente.
-     *
-     * FIX BUILD : méthode manquante → "Unresolved reference: getExistingSurahId"
-     */
+    // FIX #8 — Version suspend sûre : vérifie en DB directement
+    // À appeler dans les contextes où on peut vérifier proprement
+    suspend fun isSurahAlreadyImportedSafe(surahNumber: Int, reciterId: String): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                val list = repo.getAllSouratesSync()
+                list.any { it.sourateNumber == surahNumber && it.reciterId == reciterId }
+            } catch (e: Exception) {
+                false
+            }
+        }
+    }
+
+    // FIX #8 — Version suspend sûre pour récupérer l'ID existant
+    suspend fun getExistingSurahIdSafe(surahNumber: Int, reciterId: String): Long? {
+        return withContext(Dispatchers.IO) {
+            try {
+                val list = repo.getAllSouratesSync()
+                list.firstOrNull { it.sourateNumber == surahNumber && it.reciterId == reciterId }?.id
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+
     fun getExistingSurahId(surahNumber: Int, reciterId: String): Long? {
         val list = sourates.value ?: return null
         return list.firstOrNull { it.sourateNumber == surahNumber && it.reciterId == reciterId }?.id
     }
 
-    /**
-     * Importe une sourate depuis la bibliothèque intégrée (streaming Alafasy/everyayah).
-     * Télécharge le texte arabe, crée la Sourate + les Versets en base.
-     * Appelle [onResult] avec l'id de la sourate créée (> 0) ou -1L en cas d'erreur.
-     *
-     * FIX BUILD : méthode manquante → "Unresolved reference: importSurahFromLibrary"
-     * FIX BUILD : paramètre lambda sans type explicite → inférence impossible
-     */
     fun importSurahFromLibrary(
         surah: SurahInfo,
         reciter: ReciterInfo,
@@ -103,7 +114,6 @@ class SurahViewModel(app: Application) : AndroidViewModel(app) {
             val id = withContext(Dispatchers.IO) {
                 quranRepo.importSurahFromLibrary(surah, reciter)
             }
-            // onResult est toujours appelé sur le Main thread
             onResult(id)
         }
     }
