@@ -1,13 +1,12 @@
 package com.hifz.quran
 
+import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.ViewModelProvider
 import com.hifz.quran.databinding.ActivityMainBinding
 import com.hifz.quran.ui.home.HomeFragment
 import com.hifz.quran.ui.player.PlayerFragment
-import com.hifz.quran.ui.player.PlayerViewModel
 import com.hifz.quran.ui.stats.StatsFragment
 import com.hifz.quran.ui.settings.SettingsFragment
 import com.hifz.quran.ui.surah.SurahListFragment
@@ -15,21 +14,26 @@ import com.hifz.quran.ui.surah.SurahListFragment
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private lateinit var prefs: SharedPreferences
 
-    // FIX MÉMOIRE SOURATE : on garde l'ID de la dernière sourate lue
-    // pour pouvoir rouvrir le lecteur directement sur la bonne sourate
-    private var lastPlayedSourateId: Long = -1L
+    // ID de la dernière sourate jouée — persisté dans SharedPreferences
+    // pour survivre à la fermeture complète de l'app
+    private var lastPlayedSourateId: Long
+        get() = prefs.getLong("last_sourate_id", -1L)
+        set(value) = prefs.edit().putLong("last_sourate_id", value).apply()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // BUG PERSISTANCE — SharedPreferences au lieu de savedInstanceState
+        // savedInstanceState est null après fermeture complète de l'app
+        // → l'ID était perdu, le lecteur renvoyait toujours vers la bibliothèque
+        prefs = getSharedPreferences("hifz_prefs", MODE_PRIVATE)
+
         if (savedInstanceState == null) {
             loadFragment(HomeFragment(), HomeFragment::class.java.simpleName)
-        } else {
-            // Restaurer l'ID mémorisé après rotation/recreation
-            lastPlayedSourateId = savedInstanceState.getLong("last_sourate_id", -1L)
         }
 
         binding.bottomNav.setOnItemSelectedListener { item ->
@@ -37,35 +41,30 @@ class MainActivity : AppCompatActivity() {
                 R.id.nav_home     -> loadFragment(HomeFragment(),      HomeFragment::class.java.simpleName)
                 R.id.nav_sourates -> loadFragment(SurahListFragment(), SurahListFragment::class.java.simpleName)
 
-                // FIX ANR + MÉMOIRE : si une sourate a déjà été jouée → rouvrir le lecteur dessus
-                // Sinon → rediriger vers bibliothèque
-                R.id.nav_player   -> {
+                R.id.nav_player -> {
                     val sourateId = lastPlayedSourateId
                     if (sourateId != -1L) {
-                        val fragment = PlayerFragment.newInstance(sourateId)
-                        loadFragment(fragment, PlayerFragment::class.java.simpleName)
+                        // Réutilise l'instance existante si déjà présente (évite recréation inutile)
+                        val existing = supportFragmentManager
+                            .findFragmentByTag(PlayerFragment::class.java.simpleName)
+                        if (existing != null) {
+                            loadFragment(existing, PlayerFragment::class.java.simpleName)
+                        } else {
+                            loadFragment(PlayerFragment.newInstance(sourateId), PlayerFragment::class.java.simpleName)
+                        }
                     } else {
                         loadFragment(SurahListFragment(), SurahListFragment::class.java.simpleName)
                         binding.bottomNav.selectedItemId = R.id.nav_sourates
                     }
                 }
 
-                R.id.nav_stats    -> loadFragment(StatsFragment(),     StatsFragment::class.java.simpleName)
-                R.id.nav_settings -> loadFragment(SettingsFragment(),  SettingsFragment::class.java.simpleName)
+                R.id.nav_stats    -> loadFragment(StatsFragment(),    StatsFragment::class.java.simpleName)
+                R.id.nav_settings -> loadFragment(SettingsFragment(), SettingsFragment::class.java.simpleName)
             }
             true
         }
     }
 
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        outState.putLong("last_sourate_id", lastPlayedSourateId)
-    }
-
-    /**
-     * FIX NAVIGATION : réutilise l'instance existante si déjà créée
-     * → préserve la ServiceConnection du PlayerFragment
-     */
     fun loadFragment(fragment: Fragment, tag: String) {
         val existing = supportFragmentManager.findFragmentByTag(tag)
         supportFragmentManager.beginTransaction()
@@ -75,18 +74,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * FIX DOUBLE LECTURE : appelé depuis SurahListFragment avant d'ouvrir le lecteur.
-     * On mémorise ici la sourate sélectionnée AVANT de charger le fragment,
-     * ce qui garantit que nav_player retrouvera toujours la bonne sourate.
+     * Ouvre le lecteur sur une sourate précise.
+     * Mémorise l'ID dans SharedPreferences → survit à la fermeture de l'app.
+     * Supprime l'ancien PlayerFragment pour forcer la recréation avec le bon ID.
      */
     fun openPlayer(sourateId: Long) {
         lastPlayedSourateId = sourateId
-        val fragment = PlayerFragment.newInstance(sourateId)
-        // On efface l'ancien PlayerFragment du back stack pour éviter la double instance
+        // Supprimer l'ancienne instance pour que newInstance() reçoive le bon ARG_SOURATE_ID
         supportFragmentManager.findFragmentByTag(PlayerFragment::class.java.simpleName)?.let {
             supportFragmentManager.beginTransaction().remove(it).commitNow()
         }
-        loadFragment(fragment, PlayerFragment::class.java.simpleName)
+        loadFragment(PlayerFragment.newInstance(sourateId), PlayerFragment::class.java.simpleName)
         binding.bottomNav.selectedItemId = R.id.nav_player
     }
 
