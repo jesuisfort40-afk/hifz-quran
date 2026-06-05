@@ -12,7 +12,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.hifz.quran.R
 import com.hifz.quran.data.QuranData
 import com.hifz.quran.data.ReciterInfo
 import com.hifz.quran.data.SurahInfo
@@ -44,6 +43,20 @@ class SurahBrowserFragment : Fragment() {
         setupReciterSelector()
         setupSearch()
         setupList()
+        observeImportedSurahs()
+    }
+
+    // Observer les sourates importées pour mettre à jour les badges en temps réel
+    private fun observeImportedSurahs() {
+        vm.sourates.observe(viewLifecycleOwner) { sourates ->
+            // Construire le set des (sourateNumber, reciterId) importés
+            // On passe uniquement les numéros filtrés par le récitateur sélectionné
+            val importedNumbers = sourates
+                .filter { it.reciterId == selectedReciter.id }
+                .map { it.sourateNumber }
+                .toSet()
+            browserAdapter.setImportedSurahs(importedNumbers)
+        }
     }
 
     private fun setupReciterSelector() {
@@ -65,6 +78,13 @@ class SurahBrowserFragment : Fragment() {
             .setSingleChoiceItems(names, currentIdx) { dialog, which ->
                 selectedReciter = QuranData.RECITERS[which]
                 updateReciterChip()
+                // Rafraîchir les badges pour le nouveau récitateur
+                val sourates = vm.sourates.value ?: emptyList()
+                val importedNumbers = sourates
+                    .filter { it.reciterId == selectedReciter.id }
+                    .map { it.sourateNumber }
+                    .toSet()
+                browserAdapter.setImportedSurahs(importedNumbers)
                 dialog.dismiss()
             }
             .setNegativeButton("Annuler", null)
@@ -101,56 +121,46 @@ class SurahBrowserFragment : Fragment() {
 
     private fun confirmImport(surah: SurahInfo) {
         viewLifecycleOwner.lifecycleScope.launch {
+            // Double vérification DB (au cas où le LiveData ne soit pas encore à jour)
             val alreadyExists = vm.isSurahAlreadyImportedSafe(surah.number, selectedReciter.id)
             if (_binding == null) return@launch
 
             if (alreadyExists) {
+                // Déjà importée → juste proposer d'ouvrir
                 MaterialAlertDialogBuilder(requireContext())
                     .setTitle("Déjà importée")
-                    .setMessage(
-                        "${surah.nameArabic} (${surah.nameLatin}) est déjà dans ta bibliothèque " +
-                        "avec ce récitateur.\n\nOuvrir la sourate ?"
-                    )
+                    .setMessage("${surah.nameArabic} (${surah.nameLatin}) est déjà dans ta bibliothèque.")
                     .setPositiveButton("Ouvrir") { _, _ ->
                         viewLifecycleOwner.lifecycleScope.launch {
                             val id = vm.getExistingSurahIdSafe(surah.number, selectedReciter.id)
-                            if (id != null) openPlayer(id)
+                            if (id != null) (activity as? MainActivity)?.openPlayer(id)
                         }
                     }
-                    .setNegativeButton("Annuler", null)
+                    .setNegativeButton("Fermer", null)
                     .show()
                 return@launch
             }
 
             val audioInfo = if (surah.verseCount <= 10)
-                "🎵 Audio streamé verset par verset (connexion requise)."
+                "🎵 Audio streamé verset par verset."
             else
-                "🎵 Audio streamé verset par verset.\n⚠️ Connexion recommandée pour ${surah.verseCount} versets."
+                "🎵 Audio streamé · ${surah.verseCount} versets (connexion requise)."
 
+            // Un seul bouton : "Importer" — pas de lancement automatique du lecteur
             MaterialAlertDialogBuilder(requireContext())
                 .setTitle("Importer cette sourate ?")
                 .setMessage(
                     "${surah.nameArabic}\n${surah.nameLatin} — ${surah.nameFr}\n\n" +
-                    "📖 ${surah.verseCount} versets\n" +
-                    "🎙️ ${selectedReciter.displayName}\n\n" +
-                    "📥 Texte arabe téléchargé (~10 Ko).\n" +
-                    audioInfo
+                    "📖 ${surah.verseCount} versets · 🎙️ ${selectedReciter.displayName}\n\n" +
+                    "📥 Texte arabe téléchargé (~10 Ko).\n$audioInfo"
                 )
-                // BUG AUTO-LAUNCH — Bouton "Importer seulement" : importe sans ouvrir le lecteur
-                .setPositiveButton("Importer seulement") { _, _ ->
-                    importSurah(surah, openAfter = false)
-                }
-                // Bouton secondaire : importer ET ouvrir
-                .setNeutralButton("Importer et ouvrir") { _, _ ->
-                    importSurah(surah, openAfter = true)
-                }
+                .setPositiveButton("Importer") { _, _ -> importSurah(surah) }
                 .setNegativeButton("Annuler", null)
                 .show()
         }
     }
 
-    // BUG AUTO-LAUNCH — paramètre openAfter contrôle si on ouvre le lecteur après import
-    private fun importSurah(surah: SurahInfo, openAfter: Boolean) {
+    private fun importSurah(surah: SurahInfo) {
         binding.progressImport.visibility = View.VISIBLE
         binding.tvImportStatus.visibility = View.VISIBLE
         binding.tvImportStatus.text = "⏳ Importation de ${surah.nameLatin}…"
@@ -158,25 +168,18 @@ class SurahBrowserFragment : Fragment() {
         vm.importSurahFromLibrary(surah, selectedReciter) { result: Long ->
             if (_binding == null) return@importSurahFromLibrary
             binding.progressImport.visibility = View.GONE
-            when {
-                result > 0 -> {
-                    binding.tvImportStatus.text = "✅ ${surah.nameLatin} importée !"
-                    binding.tvImportStatus.postDelayed({
-                        if (_binding != null) binding.tvImportStatus.visibility = View.GONE
-                    }, 2500)
-                    // N'ouvre le lecteur que si l'utilisateur l'a demandé explicitement
-                    if (openAfter) openPlayer(result)
-                }
-                else -> {
-                    binding.tvImportStatus.text = "❌ Erreur. Vérifiez votre connexion."
-                    Toast.makeText(requireContext(), "Erreur d'importation", Toast.LENGTH_SHORT).show()
-                }
+            if (result > 0) {
+                binding.tvImportStatus.text = "✅ ${surah.nameLatin} importée !"
+                // Le LiveData vm.sourates va se mettre à jour automatiquement
+                // → observeImportedSurahs() va rafraîchir le badge de l'item
+                binding.tvImportStatus.postDelayed({
+                    if (_binding != null) binding.tvImportStatus.visibility = View.GONE
+                }, 2500)
+            } else {
+                binding.tvImportStatus.text = "❌ Erreur. Vérifiez votre connexion."
+                Toast.makeText(requireContext(), "Erreur d'importation", Toast.LENGTH_SHORT).show()
             }
         }
-    }
-
-    private fun openPlayer(sourateId: Long) {
-        (activity as? MainActivity)?.openPlayer(sourateId)
     }
 
     override fun onDestroyView() {
