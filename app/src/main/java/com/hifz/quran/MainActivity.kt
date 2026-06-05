@@ -10,6 +10,7 @@ import com.hifz.quran.ui.player.PlayerFragment
 import com.hifz.quran.ui.stats.StatsFragment
 import com.hifz.quran.ui.settings.SettingsFragment
 import com.hifz.quran.ui.surah.SurahListFragment
+import com.hifz.quran.ui.surah.SurahBrowserFragment
 
 class MainActivity : AppCompatActivity() {
 
@@ -135,5 +136,22 @@ class MainActivity : AppCompatActivity() {
 
     fun navigateTo(navId: Int) {
         binding.bottomNav.selectedItemId = navId
+    }
+
+    /** Ouvre la bibliothèque (SurahBrowserFragment) par-dessus la liste des sourates */
+    fun showBrowser() {
+        val fm = supportFragmentManager
+        val tx = fm.beginTransaction()
+        fm.fragments.forEach { tx.hide(it) }
+        val tag = SurahBrowserFragment::class.java.simpleName
+        val existing = fm.findFragmentByTag(tag)
+        if (existing != null) {
+            tx.show(existing)
+        } else {
+            val f = SurahBrowserFragment()
+            tx.add(R.id.fragmentContainer, f, tag)
+        }
+        tx.addToBackStack(tag)
+        tx.commit()
     }
 }
