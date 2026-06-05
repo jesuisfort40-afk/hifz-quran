@@ -36,7 +36,6 @@
             android:orientation="vertical"
             android:layout_marginStart="12dp">
 
-            <!-- Nom arabe -->
             <TextView
                 android:id="@+id/tvArabic"
                 android:layout_width="wrap_content"
@@ -47,7 +46,6 @@
                 android:fontFamily="serif"
                 android:textDirection="rtl" />
 
-            <!-- Nom latin + traduction -->
             <TextView
                 android:id="@+id/tvLatin"
                 android:layout_width="wrap_content"
@@ -66,12 +64,12 @@
                 android:textColor="@color/muted"
                 android:textSize="12sp" />
 
-            <!-- Métadonnées -->
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:layout_marginTop="4dp">
+                android:layout_marginTop="4dp"
+                android:gravity="center_vertical">
 
                 <TextView
                     android:id="@+id/tvVerseCount"
@@ -95,10 +93,22 @@
                     android:text="Juz 1"
                     android:textColor="@color/muted"
                     android:textSize="11sp" />
+
+                <!-- Badge "Déjà importée" — visible seulement si importée -->
+                <TextView
+                    android:id="@+id/tvImportedBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=" · ✓ Importée"
+                    android:textColor="#4CAF50"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+
             </LinearLayout>
         </LinearLayout>
 
-        <!-- Bouton ajouter -->
+        <!-- Bouton ajouter / déjà importé -->
         <ImageButton
             android:id="@+id/btnAdd"
             android:layout_width="40dp"
