@@ -44,9 +44,7 @@ class SurahListFragment : Fragment() {
         }
 
         binding.fabAdd.setOnClickListener {
-            (activity as? MainActivity)?.apply {
-                loadFragment(SurahBrowserFragment(), SurahBrowserFragment::class.java.simpleName)
-            }
+            (activity as? MainActivity)?.showBrowser()
         }
     }
 
